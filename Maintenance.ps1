@@ -1,8 +1,3 @@
-function Start-WindowsMaintenance {
-    param(
-        [ValidateSet("Repair","Updates","Both")]
-        [string]$Mode
-    )
 # ============================================================
 # MODE SELECTION
 # ============================================================
@@ -17,17 +12,17 @@ if ([string]::IsNullOrWhiteSpace($Mode)) {
     Write-Host "1. Repair Only" -ForegroundColor Yellow
     Write-Host "2. Updates Only" -ForegroundColor Yellow
     Write-Host "3. Repair + Updates" -ForegroundColor Yellow
-    Write-Host ""
-
-    do {
-        $Selection = Read-Host "Select an option (1-3)"
-    }
-    until ($Selection -in @("1","2","3"))
-
+    Write-Host "4. Reset Print Spooler" -ForegroundColor Yellow
+    Write-Host "5. All Tasks" -ForegroundColor Yellow
+    
+    until ($Selection -in @("1","2","3","4","5"))
+    
     switch ($Selection) {
         "1" { $Mode = "Repair" }
         "2" { $Mode = "Updates" }
         "3" { $Mode = "Both" }
+        "4" { $Mode = "Spooler" }
+        "5" { $Mode = "All" }
     }
 }
 
@@ -49,8 +44,9 @@ catch {
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$RunRepair = $Mode -in @("Repair","Both")
-$RunUpdates = $Mode -in @("Updates","Both")
+$RunRepair  = $Mode -in @("Repair","Both","All")
+$RunUpdates = $Mode -in @("Updates","Both","All")
+$RunSpooler = $Mode -in @("Spooler","All")
 
 $StartTime = Get-Date
 $CorruptionDetected = $false
@@ -125,6 +121,53 @@ if ($RunRepair) {
 
         Write-Host "    No component store corruption detected." -ForegroundColor Green
         Write-Host "    Repair phase completed." -ForegroundColor Green
+    }
+}
+
+# ============================================================
+# PRINT SPOOLER RESET
+# ============================================================
+
+if ($RunSpooler) {
+
+    Write-Host ""
+    Write-Host "===== PRINT SPOOLER RESET =====" -ForegroundColor Cyan
+
+    try {
+
+        Write-Host "Stopping Print Spooler service..." -ForegroundColor Yellow
+        Stop-Service -Name Spooler -Force -ErrorAction Stop
+
+        Start-Sleep -Seconds 3
+
+        Write-Host "Clearing spool folder..." -ForegroundColor Yellow
+
+        $SpoolPath = "$env:SystemRoot\System32\spool\PRINTERS"
+
+        if (Test-Path $SpoolPath) {
+
+            Get-ChildItem $SpoolPath -Force -ErrorAction SilentlyContinue |
+                Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+        }
+
+        Write-Host "Starting Print Spooler service..." -ForegroundColor Yellow
+        Start-Service -Name Spooler -ErrorAction Stop
+
+        Start-Sleep -Seconds 2
+
+        $SpoolerStatus = (Get-Service -Name Spooler).Status
+
+        if ($SpoolerStatus -eq 'Running') {
+            Write-Host "    Print Spooler reset successfully." -ForegroundColor Green
+        }
+        else {
+            Write-Host "    Print Spooler is not running." -ForegroundColor Red
+        }
+    }
+    catch {
+
+        Write-Host "    Failed to reset Print Spooler." -ForegroundColor Red
+        Write-Host "    $($_.Exception.Message)" -ForegroundColor Yellow
     }
 }
 
@@ -329,10 +372,11 @@ if ($RunUpdates -and $Updates) {
     Write-Host "Updates Found  : $($Updates.Count)"
 }
 
+if ($RunSpooler) {
+    Write-Host "Print Spooler : Reset Completed" -ForegroundColor Green
+}
+
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host " Windows Maintenance Complete" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 
-}
-
-Start-WindowsMaintenance
