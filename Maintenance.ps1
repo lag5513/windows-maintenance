@@ -1,148 +1,77 @@
 # ============================================================
-# MODE SELECTION
-# ============================================================
-
-if ([string]::IsNullOrWhiteSpace($Mode)) {
-
-    Write-Host ""
-    Write-Host "======================================" -ForegroundColor Cyan
-    Write-Host " Windows Maintenance Utility" -ForegroundColor Cyan
-    Write-Host "======================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "1. Repair Only" -ForegroundColor Yellow
-    Write-Host "2. Updates Only" -ForegroundColor Yellow
-    Write-Host "3. Repair + Updates" -ForegroundColor Yellow
-    Write-Host "4. Reset Print Spooler" -ForegroundColor Yellow
-    Write-Host "5. All Tasks" -ForegroundColor Yellow
-    do {
-        $Selection = Read-Host "Select an option (1-5)"
-    }
-    until ($Selection -in @("1","2","3","4","5"))
-    
-    switch ($Selection) {
-        "1" { $Mode = "Repair" }
-        "2" { $Mode = "Updates" }
-        "3" { $Mode = "Both" }
-        "4" { $Mode = "Spooler" }
-        "5" { $Mode = "All" }
-    }
-}
-
-# ============================================================
-# SETTINGS
+# Windows Maintenance Utility
 # ============================================================
 
 $ErrorActionPreference = "Continue"
 $ProgressPreference = "SilentlyContinue"
-$ConfirmPreference = "None"
 
 try {
-    Set-ExecutionPolicy Bypass -Scope Process -Force -ErrorAction Stop
-    Write-Host "    Execution Policy set to Bypass for current session." -ForegroundColor Green
-}
-catch {
-    Write-Warning "Unable to modify execution policy."
-}
+    Set-ExecutionPolicy Bypass -Scope Process -Force -ErrorAction SilentlyContinue
+} catch {}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$RunRepair  = $Mode -in @("Repair","Both","All")
-$RunUpdates = $Mode -in @("Updates","Both","All")
-$RunSpooler = $Mode -in @("Spooler","All")
-
-$StartTime = Get-Date
-$CorruptionDetected = $false
-$Updates = $null
-
-Write-Host ""
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host " Windows Maintenance Started" -ForegroundColor Cyan
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host "Mode: $Mode" -ForegroundColor Green
-
 # ============================================================
-# REPAIR PHASE
+# LOGGING
 # ============================================================
 
-if ($RunRepair) {
+$LogFile = Join-Path $env:TEMP ("WindowsMaintenance_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+
+try {
+    Start-Transcript -Path $LogFile -Force | Out-Null
+}
+catch {}
+
+# ============================================================
+# FUNCTIONS
+# ============================================================
+
+function Invoke-SystemRepair {
 
     Write-Host ""
-    Write-Host "===== SYSTEM REPAIR PHASE =====" -ForegroundColor Cyan
+    Write-Host "===== SYSTEM REPAIR =====" -ForegroundColor Cyan
 
-    Write-Host "[1/10] Running SFC Scan..." -ForegroundColor Yellow
-    Write-Host "    Scanning protected system files..." -ForegroundColor Gray
-
-    $SFCStart = Get-Date
+    Write-Host "[1/4] Running SFC Scan..." -ForegroundColor Yellow
     sfc /scannow
-    $SFCEnd = Get-Date
-
-    Write-Host ("    SFC completed in {0} minute(s)." -f `
-        [math]::Round(($SFCEnd - $SFCStart).TotalMinutes,2)) -ForegroundColor Green
 
     Write-Host ""
-    Write-Host "[2/10] Running DISM CheckHealth..." -ForegroundColor Yellow
-    Write-Host "    Checking component store health..." -ForegroundColor Gray
+    Write-Host "[2/4] Running DISM CheckHealth..." -ForegroundColor Yellow
 
-    $CheckHealthOutput = dism /Online /Cleanup-Image /CheckHealth | Out-String
+    $CheckHealth = dism /Online /Cleanup-Image /CheckHealth | Out-String
 
-    if (
-        $CheckHealthOutput -match "repairable" -or
-        $CheckHealthOutput -match "component store is repairable"
-    ) {
-        $CorruptionDetected = $true
-    }
+    if ($CheckHealth -match "repairable") {
 
-    if ($CorruptionDetected) {
-
-        Write-Host "[3/10] Running RestoreHealth..." -ForegroundColor Yellow
-        Write-Host "    Repairing Windows component store..." -ForegroundColor Gray
-
-        $RestoreStart = Get-Date
+        Write-Host ""
+        Write-Host "[3/4] Component Store Corruption Detected" -ForegroundColor Yellow
 
         dism /Online /Cleanup-Image /RestoreHealth
 
-        $RestoreEnd = Get-Date
-
-        Write-Host ("    RestoreHealth completed in {0} minute(s)." -f `
-            [math]::Round(($RestoreEnd - $RestoreStart).TotalMinutes,2)) -ForegroundColor Green
-
         Write-Host ""
-        Write-Host "[4/10] Running Validation SFC..." -ForegroundColor Yellow
-        Write-Host "    Verifying repair results..." -ForegroundColor Gray
-
-        $SFC2Start = Get-Date
+        Write-Host "[4/4] Running Validation SFC..." -ForegroundColor Yellow
 
         sfc /scannow
 
-        $SFC2End = Get-Date
-
-        Write-Host ("    Validation SFC completed in {0} minute(s)." -f `
-            [math]::Round(($SFC2End - $SFC2Start).TotalMinutes,2)) -ForegroundColor Green
+        return "Corruption Repaired"
     }
-    else {
 
-        Write-Host "    No component store corruption detected." -ForegroundColor Green
-        Write-Host "    Repair phase completed." -ForegroundColor Green
-    }
+    Write-Host "No corruption detected." -ForegroundColor Green
+    return "No Corruption Detected"
 }
 
-# ============================================================
-# PRINT SPOOLER RESET
-# ============================================================
-
-if ($RunSpooler) {
+function Reset-PrintSpooler {
 
     Write-Host ""
     Write-Host "===== PRINT SPOOLER RESET =====" -ForegroundColor Cyan
 
     try {
 
-        Write-Host "Stopping Print Spooler service..." -ForegroundColor Yellow
-        Stop-Service -Name Spooler -Force -ErrorAction Stop
+        Write-Host "Stopping Spooler Service..." -ForegroundColor Yellow
 
-        Start-Sleep -Seconds 3
+        Stop-Service Spooler -Force -ErrorAction Stop
 
-        Write-Host "Clearing spool folder..." -ForegroundColor Yellow
+        Start-Sleep 3
+
+        Write-Host "Clearing Print Queue..." -ForegroundColor Yellow
 
         $SpoolPath = "$env:SystemRoot\System32\spool\PRINTERS"
 
@@ -152,51 +81,38 @@ if ($RunSpooler) {
                 Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
         }
 
-        Write-Host "Starting Print Spooler service..." -ForegroundColor Yellow
-        Start-Service -Name Spooler -ErrorAction Stop
+        Write-Host "Starting Spooler Service..." -ForegroundColor Yellow
 
-        Start-Sleep -Seconds 2
+        Start-Service Spooler -ErrorAction Stop
 
-        $SpoolerStatus = (Get-Service -Name Spooler).Status
+        Start-Sleep 2
 
-        if ($SpoolerStatus -eq 'Running') {
-            Write-Host "    Print Spooler reset successfully." -ForegroundColor Green
+        if ((Get-Service Spooler).Status -eq "Running") {
+
+            Write-Host "Print Spooler Reset Successful" -ForegroundColor Green
+            return $true
         }
-        else {
-            Write-Host "    Print Spooler is not running." -ForegroundColor Red
-        }
+
+        return $false
     }
     catch {
 
-        Write-Host "    Failed to reset Print Spooler." -ForegroundColor Red
-        Write-Host "    $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        return $false
     }
 }
 
-# ============================================================
-# WINDOWS UPDATE PHASE
-# ============================================================
-
-if ($RunUpdates) {
+function Invoke-WindowsUpdates {
 
     Write-Host ""
-    Write-Host "===== WINDOWS UPDATE PHASE =====" -ForegroundColor Cyan
-
-    Write-Host "[5/10] Configuring PowerShell Gallery..." -ForegroundColor Yellow
-    Write-Host "    Configuring trusted repository..." -ForegroundColor Gray
+    Write-Host "===== WINDOWS UPDATES =====" -ForegroundColor Cyan
 
     try {
+
         Set-PSRepository `
             -Name PSGallery `
             -InstallationPolicy Trusted `
             -ErrorAction SilentlyContinue
-    }
-    catch {}
-
-    Write-Host "[6/10] Checking NuGet Provider..." -ForegroundColor Yellow
-    Write-Host "    Verifying package provider..." -ForegroundColor Gray
-
-    try {
 
         if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
 
@@ -204,42 +120,19 @@ if ($RunUpdates) {
                 -Name NuGet `
                 -MinimumVersion 2.8.5.201 `
                 -Force `
-                -Scope AllUsers `
                 -Confirm:$false
-
-            Write-Host "    NuGet provider installed." -ForegroundColor Green
         }
-        else {
-            Write-Host "    NuGet provider already installed." -ForegroundColor Green
-        }
-    }
-    catch {
-        Write-Warning $_.Exception.Message
-    }
-
-    Write-Host "[7/10] Checking PSWindowsUpdate..." -ForegroundColor Yellow
-    Write-Host "    Verifying update module..." -ForegroundColor Gray
-
-    try {
 
         if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
 
             Install-Module `
                 -Name PSWindowsUpdate `
-                -Repository PSGallery `
                 -Force `
                 -AllowClobber `
-                -Scope AllUsers `
                 -Confirm:$false
-
-            Write-Host "    PSWindowsUpdate module installed." -ForegroundColor Green
-        }
-        else {
-
-            Write-Host "    PSWindowsUpdate module already installed." -ForegroundColor Green
         }
 
-        Import-Module PSWindowsUpdate -Force -ErrorAction Stop
+        Import-Module PSWindowsUpdate -Force
 
         try {
             Add-WUServiceManager `
@@ -249,99 +142,179 @@ if ($RunUpdates) {
         }
         catch {}
 
-        Write-Host "    Update module loaded successfully." -ForegroundColor Green
+        Write-Host "Scanning for Updates..." -ForegroundColor Yellow
+
+        $Updates = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue
+
+        if ($Updates) {
+
+            Write-Host "$($Updates.Count) Update(s) Found" -ForegroundColor Green
+
+            Install-WindowsUpdate `
+                -MicrosoftUpdate `
+                -AcceptAll `
+                -IgnoreReboot `
+                -Confirm:$false
+
+            return $Updates.Count
+        }
+
+        Write-Host "No Updates Available" -ForegroundColor Green
+        return 0
     }
     catch {
 
-        Write-Host "    Failed to load PSWindowsUpdate." -ForegroundColor Red
-        Write-Host "    $($_.Exception.Message)" -ForegroundColor Yellow
-        exit 1
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        return 0
     }
+}
 
-    Write-Host "[8/10] Scanning for Updates..." -ForegroundColor Yellow
-    Write-Host "    Searching Microsoft Update catalog..." -ForegroundColor Gray
+function Invoke-ApplicationUpdates {
+
+    Write-Host ""
+    Write-Host "===== APPLICATION UPDATES =====" -ForegroundColor Cyan
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+
+        Write-Host "Winget Not Installed" -ForegroundColor Red
+        return
+    }
 
     try {
 
-        $Updates = Get-WindowsUpdate `
-            -MicrosoftUpdate `
-            -ErrorAction Stop
+        winget source update
+
+        winget upgrade `
+            --all `
+            --silent `
+            --accept-source-agreements `
+            --accept-package-agreements `
+            --disable-interactivity
+
+        Write-Host "Application Updates Completed" -ForegroundColor Green
     }
     catch {
 
-        Write-Warning "Initial scan failed."
-
-        Write-Host "    Resetting Windows Update Components..." -ForegroundColor Yellow
-
-        Reset-WUComponents -ErrorAction SilentlyContinue
-
-        Start-Sleep -Seconds 15
-
-        Write-Host "    Retrying scan..." -ForegroundColor Yellow
-
-        $Updates = Get-WindowsUpdate `
-            -MicrosoftUpdate `
-            -ErrorAction Stop
+        Write-Host $_.Exception.Message -ForegroundColor Red
     }
+}
 
-    if ($Updates -and $Updates.Count -gt 0) {
+function Get-RebootStatus {
 
-        Write-Host "    Found $($Updates.Count) update(s)." -ForegroundColor Green
+    try {
 
-        foreach ($Update in $Updates) {
-            Write-Host "        - $($Update.Title)" -ForegroundColor White
+        if (Get-Command Get-WURebootStatus -ErrorAction SilentlyContinue) {
+
+            return (Get-WURebootStatus -Silent)
         }
 
-        Write-Host ""
-        Write-Host "[9/10] Installing Updates..." -ForegroundColor Yellow
-        Write-Host "    Installing updates. This may take some time..." -ForegroundColor Gray
+        $Keys = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending",
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
+        )
 
-        Install-WindowsUpdate `
-            -MicrosoftUpdate `
-            -AcceptAll `
-            -IgnoreReboot `
-            -Confirm:$false
+        foreach ($Key in $Keys) {
 
-        Write-Host "    Update installation completed." -ForegroundColor Green
+            if (Test-Path $Key) {
+                return $true
+            }
+        }
+
+        return $false
     }
-    else {
-
-        Write-Host "    No updates available." -ForegroundColor Green
+    catch {
+        return $false
     }
 }
 
 # ============================================================
-# REBOOT CHECK
+# MENU
 # ============================================================
 
 Write-Host ""
-Write-Host "[10/10] Checking reboot status..." -ForegroundColor Yellow
-Write-Host "    Checking if restart is required..." -ForegroundColor Gray
+Write-Host "======================================" -ForegroundColor Cyan
+Write-Host " Windows Maintenance Utility" -ForegroundColor Cyan
+Write-Host "======================================" -ForegroundColor Cyan
+Write-Host ""
 
-try {
+Write-Host "1. Repair Windows" -ForegroundColor Yellow
+Write-Host "2. Windows Updates" -ForegroundColor Yellow
+Write-Host "3. Application Updates" -ForegroundColor Yellow
+Write-Host "4. Reset Print Spooler" -ForegroundColor Yellow
+Write-Host "5. Repair + Windows Updates" -ForegroundColor Yellow
+Write-Host "6. Run Everything" -ForegroundColor Yellow
+Write-Host "7. Exit" -ForegroundColor Yellow
+Write-Host ""
 
-    if (Get-Command Get-WURebootStatus -ErrorAction SilentlyContinue) {
+do {
+    $Selection = Read-Host "Select an option (1-7)"
+}
+until ($Selection -in @("1","2","3","4","5","6","7"))
 
-        if (Get-WURebootStatus -Silent) {
+$StartTime = Get-Date
 
-            Write-Host ""
-            Write-Host "****************************************" -ForegroundColor Red
-            Write-Host "* REBOOT REQUIRED                      *" -ForegroundColor Red
-            Write-Host "****************************************" -ForegroundColor Red
-        }
-        else {
+$RepairStatus = ""
+$UpdateCount = 0
+$SpoolerStatus = ""
+$AppsStatus = ""
 
-            Write-Host "    No reboot required." -ForegroundColor Green
-        }
+switch ($Selection) {
+
+    "1" {
+        $RepairStatus = Invoke-SystemRepair
     }
-    else {
 
-        Write-Host "    Unable to determine reboot status." -ForegroundColor Yellow
+    "2" {
+        $UpdateCount = Invoke-WindowsUpdates
+    }
+
+    "3" {
+        Invoke-ApplicationUpdates
+        $AppsStatus = "Completed"
+    }
+
+    "4" {
+        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
+    }
+
+    "5" {
+        $RepairStatus = Invoke-SystemRepair
+        $UpdateCount = Invoke-WindowsUpdates
+    }
+
+    "6" {
+        $RepairStatus = Invoke-SystemRepair
+        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
+        $UpdateCount = Invoke-WindowsUpdates
+        Invoke-ApplicationUpdates
+        $AppsStatus = "Completed"
+    }
+
+    "7" {
+        Stop-Transcript | Out-Null
+        return
     }
 }
-catch {
 
-    Write-Host "    Unable to determine reboot status." -ForegroundColor Yellow
+# ============================================================
+# REBOOT STATUS
+# ============================================================
+
+$RebootRequired = Get-RebootStatus
+
+Write-Host ""
+Write-Host "===== REBOOT STATUS =====" -ForegroundColor Cyan
+
+if ($RebootRequired) {
+
+    Write-Host ""
+    Write-Host "****************************************" -ForegroundColor Red
+    Write-Host "* REBOOT REQUIRED                      *" -ForegroundColor Red
+    Write-Host "****************************************" -ForegroundColor Red
+}
+else {
+
+    Write-Host "No Reboot Required" -ForegroundColor Green
 }
 
 # ============================================================
@@ -355,30 +328,37 @@ Write-Host "======================================" -ForegroundColor Cyan
 Write-Host " MAINTENANCE SUMMARY" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 
-Write-Host "Mode       : $Mode"
 Write-Host "Start Time : $StartTime"
 Write-Host "End Time   : $EndTime"
-Write-Host ("Duration   : {0} minutes" -f `
-    [math]::Round(($EndTime - $StartTime).TotalMinutes,2))
 
-if ($RunRepair) {
-    if ($CorruptionDetected) {
-        Write-Host "OS Repair      : Corruption repaired" -ForegroundColor Green
-    }
-    else {
-        Write-Host "OS Repair      : No corruption detected" -ForegroundColor Green
-    }
+Write-Host ("Duration   : {0} Minutes" -f `
+        [math]::Round(($EndTime - $StartTime).TotalMinutes,2))
+
+if ($RepairStatus) {
+    Write-Host "Repair      : $RepairStatus"
 }
 
-if ($RunUpdates -and $Updates) {
-    Write-Host "Updates Found  : $($Updates.Count)"
+if ($SpoolerStatus) {
+    Write-Host "Spooler     : $SpoolerStatus"
 }
 
-if ($RunSpooler) {
-    Write-Host "Print Spooler : Reset Completed" -ForegroundColor Green
+if ($AppsStatus) {
+    Write-Host "Applications: $AppsStatus"
 }
 
+if ($UpdateCount -ge 0) {
+    Write-Host "Updates     : $UpdateCount"
+}
+
+Write-Host "Reboot Req. : $RebootRequired"
+Write-Host "Log File    : $LogFile"
+
+Write-Host ""
 Write-Host "======================================" -ForegroundColor Cyan
-Write-Host " Windows Maintenance Complete" -ForegroundColor Cyan
+Write-Host " Maintenance Complete" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 
+try {
+    Stop-Transcript | Out-Null
+}
+catch {}
