@@ -1,11 +1,19 @@
-$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
-$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+# ============================================================
+# ELEVATION CHECK
+# ============================================================
 
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
+$CurrentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$Principal = New-Object Security.Principal.WindowsPrincipal($CurrentIdentity)
+
+if (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
 
     Write-Host ""
-    Write-Host "This script must run as Administrator." -ForegroundColor Yellow
-    Write-Host "Please reopen PowerShell as Administrator and run again." -ForegroundColor Red
+    Write-Host "ERROR: Administrator privileges are required." -ForegroundColor Red
+    Write-Host "Please reopen PowerShell as Administrator and run the script again." -ForegroundColor Yellow
+    Write-Host ""
+
+    Read-Host "Press Enter to close this window"
+
     exit 1
 }
 
