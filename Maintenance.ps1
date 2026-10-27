@@ -1,8 +1,8 @@
-param(
-    [ValidateSet("Repair", "Updates", "Both")]
-    [string]$Mode
-)
-
+function Start-WindowsMaintenance {
+    param(
+        [ValidateSet("Repair","Updates","Both")]
+        [string]$Mode
+    )
 # ============================================================
 # MODE SELECTION
 # ============================================================
@@ -328,6 +328,9 @@ if ($RunRepair) {
 if ($RunUpdates -and $Updates) {
     Write-Host "Updates Found  : $($Updates.Count)"
 }
+}
+
+Start-WindowsMaintenance
 
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host " Windows Maintenance Complete" -ForegroundColor Cyan
