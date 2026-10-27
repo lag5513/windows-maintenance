@@ -31,17 +31,6 @@ try {
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # ============================================================
-# LOGGING
-# ============================================================
-
-$LogFile = Join-Path $env:TEMP ("WindowsMaintenance_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-
-try {
-    Start-Transcript -Path $LogFile -Force | Out-Null
-}
-catch {}
-
-# ============================================================
 # FUNCTIONS
 # ============================================================
 
@@ -54,25 +43,25 @@ function Invoke-SystemRepair {
     sfc /scannow
 
     Write-Host ""
-    Write-Host "[2/4] Running DISM CheckHealth..." -ForegroundColor Yellow
-
-    $CheckHealth = dism /Online /Cleanup-Image /CheckHealth | Out-String
-
-    if ($CheckHealth -match "repairable") {
-
+    Write-Host "[2/4] Running DISM ScanHealth..." -ForegroundColor Yellow
+    
+    $ScanHealth = dism /Online /Cleanup-Image /ScanHealth | Out-String
+    
+    if ($ScanHealth -match "repairable") {
+    
         Write-Host ""
         Write-Host "[3/4] Component Store Corruption Detected" -ForegroundColor Yellow
-
+    
         dism /Online /Cleanup-Image /RestoreHealth
-
+    
         Write-Host ""
         Write-Host "[4/4] Running Validation SFC..." -ForegroundColor Yellow
-
+    
         sfc /scannow
-
+    
         return "Corruption Repaired"
     }
-
+    
     Write-Host "No corruption detected." -ForegroundColor Green
     return "No Corruption Detected"
 }
@@ -370,14 +359,9 @@ if ($UpdateCount -ge 0) {
 }
 
 Write-Host "Reboot Req. : $RebootRequired"
-Write-Host "Log File    : $LogFile"
 
 Write-Host ""
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host " Maintenance Complete" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 
-try {
-    Stop-Transcript | Out-Null
-}
-catch {}
