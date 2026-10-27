@@ -1,3 +1,14 @@
+$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
+
+    Write-Host ""
+    Write-Host "This script must run as Administrator." -ForegroundColor Yellow
+    Write-Host "Please reopen PowerShell as Administrator and run again." -ForegroundColor Red
+    exit 1
+}
+
 # ============================================================
 # Windows Maintenance Utility
 # ============================================================
