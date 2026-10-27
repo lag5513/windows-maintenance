@@ -246,11 +246,11 @@ Write-Host "======================================" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "1. Repair Windows" -ForegroundColor Yellow
-Write-Host "2. Windows Updates" -ForegroundColor Yellow
-Write-Host "3. Application Updates" -ForegroundColor Yellow
-Write-Host "4. Reset Print Spooler" -ForegroundColor Yellow
-Write-Host "5. Repair + Windows Updates" -ForegroundColor Yellow
-Write-Host "6. Run Everything" -ForegroundColor Yellow
+Write-Host "2. Update Windows" -ForegroundColor Yellow
+Write-Host "3. Repair + Update Windows" -ForegroundColor Yellow
+Write-Host "4. Update Applications" -ForegroundColor Yellow
+Write-Host "5. Reset Print Spooler" -ForegroundColor Yellow
+Write-Host "6. Run All" -ForegroundColor Yellow
 Write-Host "7. Exit" -ForegroundColor Yellow
 Write-Host ""
 
@@ -277,30 +277,35 @@ switch ($Selection) {
     }
 
     "3" {
+        $RepairStatus = Invoke-SystemRepair
+        $UpdateCount = Invoke-WindowsUpdates
+    }
+
+    "4" {
         Invoke-ApplicationUpdates
         $AppsStatus = "Completed"
     }
 
-    "4" {
-        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
-    }
-
     "5" {
-        $RepairStatus = Invoke-SystemRepair
-        $UpdateCount = Invoke-WindowsUpdates
+        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
     }
 
     "6" {
         $RepairStatus = Invoke-SystemRepair
-        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
+
         $UpdateCount = Invoke-WindowsUpdates
+
         Invoke-ApplicationUpdates
         $AppsStatus = "Completed"
+
+        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
     }
 
     "7" {
-        Stop-Transcript | Out-Null
-        return
+        Write-Host ""
+        Write-Host "Exiting..." -ForegroundColor Yellow
+        Read-Host "Press Enter to close"
+        exit
     }
 }
 
