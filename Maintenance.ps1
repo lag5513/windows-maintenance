@@ -328,10 +328,11 @@ if ($RunRepair) {
 if ($RunUpdates -and $Updates) {
     Write-Host "Updates Found  : $($Updates.Count)"
 }
-}
-
-Start-WindowsMaintenance
 
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host " Windows Maintenance Complete" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
+
+}
+
+Start-WindowsMaintenance
