@@ -14,7 +14,9 @@ if ([string]::IsNullOrWhiteSpace($Mode)) {
     Write-Host "3. Repair + Updates" -ForegroundColor Yellow
     Write-Host "4. Reset Print Spooler" -ForegroundColor Yellow
     Write-Host "5. All Tasks" -ForegroundColor Yellow
-    
+    do {
+        $Selection = Read-Host "Select an option (1-5)"
+    }
     until ($Selection -in @("1","2","3","4","5"))
     
     switch ($Selection) {
