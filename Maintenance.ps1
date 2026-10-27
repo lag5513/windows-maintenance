@@ -22,10 +22,10 @@ if (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 # ============================================================
 
 $ErrorActionPreference = "Continue"
-$ProgressPreference = "SilentlyContinue"
+
 
 try {
-    Set-ExecutionPolicy Bypass -Scope Process -Force -ErrorAction SilentlyContinue
+    Set-ExecutionPolicy Bypass -Scope Process -Force -ErrorAction
 } catch {}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -45,7 +45,7 @@ function Invoke-SystemRepair {
     Write-Host ""
     Write-Host "[2/4] Running DISM ScanHealth..." -ForegroundColor Yellow
     
-    $ScanHealth = dism /Online /Cleanup-Image /ScanHealth | Out-String
+    $ScanHealth = dism /Online /Cleanup-Image /ScanHealth
     
     if ($ScanHealth -match "repairable") {
     
