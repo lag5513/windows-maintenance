@@ -22,7 +22,7 @@ if (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 # Windows Maintenance Utility
 # ============================================================
 
-$ErrorActionPreference = "Continue"
+#$ErrorActionPreference = "Continue"
 
 
 Write-Host "Configuring PowerShell execution policy..." -ForegroundColor Yellow
@@ -56,7 +56,7 @@ Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
 
     Write-Host ""
     Write-Host "[2/4] Running DISM CheckHealth..." -ForegroundColor Yellow
-    
+    DISM.exe /Online /Cleanup-Image /ScanHealth
    $CheckHealthOutput = & DISM.exe `
     /Online `
     /Cleanup-Image `
