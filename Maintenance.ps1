@@ -374,8 +374,8 @@ Write-Host "======================================" -ForegroundColor Cyan
 Write-Host " MAINTENANCE SUMMARY" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
 
-Write-Host "Start Time : $StartTime"
-Write-Host "End Time   : $EndTime"
+Write-Host "Start Time  : $StartTime"
+Write-Host "End Time    : $EndTime"
 
 Write-Host ("Duration   : {0} Minutes" -f `
         [math]::Round(($EndTime - $StartTime).TotalMinutes,2))
