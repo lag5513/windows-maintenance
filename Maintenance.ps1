@@ -188,8 +188,9 @@ function Invoke-WindowsUpdates {
         $Updates = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue
 
         if ($Updates) {
+            $Count = @($Updates).Count
 
-            Write-Host "$($Updates.Count) Update(s) Found" -ForegroundColor Green
+            Write-Host "$($Count) Update(s) Found" -ForegroundColor Green
 
             Install-WindowsUpdate `
                 -MicrosoftUpdate `
@@ -197,7 +198,7 @@ function Invoke-WindowsUpdates {
                 -IgnoreReboot `
                 -Confirm:$false
 
-            return $Updates.Count
+            return $Count
         }
 
         Write-Host "No Updates Available" -ForegroundColor Green
@@ -295,7 +296,7 @@ until ($Selection -in @("1","2","3","4","5","6","7"))
 $StartTime = Get-Date
 
 $RepairStatus = ""
-$UpdateCount = 0
+[int]$UpdateCount = 0
 $SpoolerStatus = ""
 $AppsStatus = ""
 
@@ -325,7 +326,6 @@ switch ($Selection) {
 
     "6" {
         $RepairStatus = Invoke-SystemRepair
-
         $UpdateCount = Invoke-WindowsUpdates
 
         Invoke-ApplicationUpdates
@@ -392,9 +392,7 @@ if ($AppsStatus) {
     Write-Host "Applications: $AppsStatus"
 }
 
-if ($UpdateCount -is [int]) {
-    Write-Host "Updates     : $UpdateCount"
-}
+Write-Host "Updates     : $UpdateCount"
 
 Write-Host "Reboot Req. : $RebootRequired"
 
