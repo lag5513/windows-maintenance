@@ -52,11 +52,9 @@ function Invoke-SystemRepair {
     -Wait `
     -NoNewWindow
 
-Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
-
     Write-Host ""
     Write-Host "[2/4] Running DISM CheckHealth..." -ForegroundColor Yellow
-    DISM.exe /Online /Cleanup-Image /ScanHealth
+
    $CheckHealthOutput = & DISM.exe `
     /Online `
     /Cleanup-Image `
