@@ -40,11 +40,14 @@ function Invoke-SystemRepair {
     Write-Host ""
     Write-Host "===== SYSTEM REPAIR =====" -ForegroundColor Cyan
 
-    Write-Host "Testing native console output..." -ForegroundColor Cyan
-    cmd.exe /c "echo Hello World"
-
     Write-Host "[1/4] Running SFC Scan..." -ForegroundColor Yellow
-    cmd /c "sfc /scannow"
+    $sfc = Start-Process -FilePath "sfc.exe" `
+    -ArgumentList "/scannow" `
+    -Wait `
+    -PassThru `
+    -NoNewWindow
+
+Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
 
     Write-Host ""
     Write-Host "[2/4] Running DISM ScanHealth..." -ForegroundColor Yellow
@@ -61,7 +64,13 @@ function Invoke-SystemRepair {
         Write-Host ""
         Write-Host "[4/4] Running Validation SFC..." -ForegroundColor Yellow
     
-        cmd /c "sfc /scannow"
+        $sfc = Start-Process -FilePath "sfc.exe" `
+        -ArgumentList "/scannow" `
+        -Wait `
+        -PassThru `
+        -NoNewWindow
+    
+        Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
     
         return "Corruption Repaired"
     }
