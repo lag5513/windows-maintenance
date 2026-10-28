@@ -3,6 +3,7 @@
 # ============================================================
 
 $CurrentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$ProgressPreference = "Continue"
 $Principal = New-Object Security.Principal.WindowsPrincipal($CurrentIdentity)
 
 if (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -38,6 +39,9 @@ function Invoke-SystemRepair {
 
     Write-Host ""
     Write-Host "===== SYSTEM REPAIR =====" -ForegroundColor Cyan
+
+    Write-Host "Testing native console output..." -ForegroundColor Cyan
+    cmd.exe /c "echo Hello World"
 
     Write-Host "[1/4] Running SFC Scan..." -ForegroundColor Yellow
     cmd /c "sfc /scannow"
