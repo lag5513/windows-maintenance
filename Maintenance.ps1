@@ -51,14 +51,24 @@ Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "[2/4] Running DISM ScanHealth..." -ForegroundColor Yellow
     
-    $ScanHealth = dism /Online /Cleanup-Image /ScanHealth
+    $ScanHealth = cmd /c "DISM /Online /Cleanup-Image /ScanHealth" 2>&1 | Out-String
+
+    if (
+        $ScanHealth -match "repairable" -or
+        $ScanHealth -match "component store is repairable"
+    ) {
+        $CorruptionDetected = $true
+    }
     
-    if ($ScanHealth -match "repairable") {
+    if ($CorruptionDetected) {
     
         Write-Host ""
         Write-Host "[3/4] Component Store Corruption Detected" -ForegroundColor Yellow
     
-        dism /Online /Cleanup-Image /RestoreHealth
+        Start-Process cmd.exe `
+        -ArgumentList '/c DISM /Online /Cleanup-Image /RestoreHealth' `
+        -Wait `
+        -NoNewWindow
     
         Write-Host ""
         Write-Host "[4/4] Running Validation SFC..." -ForegroundColor Yellow
