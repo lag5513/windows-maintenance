@@ -63,7 +63,7 @@ Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
     -Wait `
     -NoNewWindow `
     -PassThru
-
+    Write-Host "    DISM output: $($proc)" -ForegroundColor Gray
     if ($proc.ExitCode -eq 0) {
         Write-Host "    DISM completed successfully." -ForegroundColor Green
     }
