@@ -40,7 +40,7 @@ function Invoke-SystemRepair {
     Write-Host "===== SYSTEM REPAIR =====" -ForegroundColor Cyan
 
     Write-Host "[1/4] Running SFC Scan..." -ForegroundColor Yellow
-    sfc /scannow
+    cmd /c "sfc /scannow"
 
     Write-Host ""
     Write-Host "[2/4] Running DISM ScanHealth..." -ForegroundColor Yellow
@@ -57,7 +57,7 @@ function Invoke-SystemRepair {
         Write-Host ""
         Write-Host "[4/4] Running Validation SFC..." -ForegroundColor Yellow
     
-        sfc /scannow
+        cmd /c "sfc /scannow"
     
         return "Corruption Repaired"
     }
