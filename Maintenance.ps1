@@ -392,7 +392,7 @@ if ($AppsStatus) {
     Write-Host "Applications: $AppsStatus"
 }
 
-if ($UpdateCount -ge 0) {
+if ($UpdateCount -is [int]) {
     Write-Host "Updates     : $UpdateCount"
 }
 
