@@ -57,19 +57,11 @@ Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "[2/4] Running DISM CheckHealth..." -ForegroundColor Yellow
     
-    $proc = Start-Process `
-    -FilePath "DISM.exe" `
-    -ArgumentList "/Online /Cleanup-Image /CheckHealth" `
-    -Wait `
-    -NoNewWindow `
-    -PassThru
-    Write-Host "    DISM output: $($proc)" -ForegroundColor Gray
-    if ($proc.ExitCode -eq 0) {
-        Write-Host "    DISM completed successfully." -ForegroundColor Green
-    }
-    else {
-        Write-Host "    DISM returned exit code $($proc.ExitCode)." -ForegroundColor Yellow
-    }
+   $CheckHealthOutput = & DISM.exe `
+    /Online `
+    /Cleanup-Image `
+    /CheckHealth 2>&1 |
+    Out-String
 
     if (
         $CheckHealthOutput -match "repairable" -or
