@@ -25,9 +25,15 @@ if (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $ErrorActionPreference = "Continue"
 
 
+Write-Host "Configuring PowerShell execution policy..." -ForegroundColor Yellow
+
 try {
-    Set-ExecutionPolicy Bypass -Scope Process -Force -ErrorAction
-} catch {}
+    Set-ExecutionPolicy Bypass -Scope Process -Force
+    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
+}
+catch {
+    Write-Warning "Unable to modify execution policy."
+}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
@@ -156,13 +162,20 @@ function Invoke-WindowsUpdates {
             -ErrorAction SilentlyContinue
 
         if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-
+        
+            Write-Host "Installing NuGet provider..." -ForegroundColor Yellow
+        
             Install-PackageProvider `
                 -Name NuGet `
                 -MinimumVersion 2.8.5.201 `
                 -Force `
+                -Scope CurrentUser `
                 -Confirm:$false
+        
+            Import-PackageProvider NuGet -Force
         }
+        
+        Write-Host "NuGet provider ready." -ForegroundColor Green
 
         if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
 
@@ -173,7 +186,28 @@ function Invoke-WindowsUpdates {
                 -Confirm:$false
         }
 
-        Import-Module PSWindowsUpdate -Force
+        $ModulePath = Get-Module `
+                    -ListAvailable `
+                    -Name PSWindowsUpdate |
+                    Sort-Object Version -Descending |
+                    Select-Object -First 1
+
+        if ($ModulePath) {
+        
+            Unblock-File `
+                -Path $ModulePath.Path `
+                -ErrorAction SilentlyContinue
+        
+            Import-Module `
+                $ModulePath.Path `
+                -Force `
+                -DisableNameChecking `
+                -ErrorAction Stop
+        }
+        else {
+        
+            throw "PSWindowsUpdate module not found."
+        }
 
         try {
             Add-WUServiceManager `
