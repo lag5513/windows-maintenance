@@ -61,12 +61,9 @@ function Invoke-SystemRepair {
     /CheckHealth 2>&1 |
     Out-String
 
-    if (
-        $CheckHealthOutput -match "repairable" -or
-        $CheckHealthOutput -match "The component store is repairable"
-    ) {
-        $CorruptionDetected = $true
-    }
+    $CorruptionDetected = $false
+
+    $CorruptionDetected = $CheckHealthOutput -match "repairable"
     
     if ($CorruptionDetected) {
     
@@ -85,8 +82,6 @@ function Invoke-SystemRepair {
         -ArgumentList '/c sfc /scannow' `
         -Wait `
         -NoNewWindow
-    
-        Write-Host "    SFC Exit Code: $($sfc.ExitCode)" -ForegroundColor Gray
     
         return "Corruption Repaired"
     }
@@ -220,7 +215,8 @@ function Invoke-WindowsUpdates {
                 -MicrosoftUpdate `
                 -AcceptAll `
                 -IgnoreReboot `
-                -Confirm:$false
+                -Confirm:$false `
+                -Verbose | Out-Null
 
             return $Count
         }
@@ -243,7 +239,7 @@ function Invoke-ApplicationUpdates {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 
         Write-Host "Winget Not Installed" -ForegroundColor Red
-        return
+        return 
     }
 
     try {
@@ -312,10 +308,9 @@ Write-Host "6. Run All" -ForegroundColor Yellow
 Write-Host "7. Exit" -ForegroundColor Yellow
 Write-Host ""
 
-do {
+while ($Selection -notmatch '^[1-7]$') {
     $Selection = Read-Host "Select an option (1-7)"
 }
-until ($Selection -in @("1","2","3","4","5","6","7"))
 
 $StartTime = Get-Date
 
@@ -352,8 +347,12 @@ switch ($Selection) {
         $RepairStatus = Invoke-SystemRepair
         $UpdateCount = Invoke-WindowsUpdates
 
-        Invoke-ApplicationUpdates
-        $AppsStatus = "Completed"
+        $AppsStatus = if (Invoke-ApplicationUpdates) {
+                "Completed"
+            }
+            else {
+                "Failed"
+            }
 
         $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
     }
