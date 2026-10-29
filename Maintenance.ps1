@@ -289,6 +289,60 @@ function Get-RebootStatus {
     }
 }
 
+function Repair-SystemClock {
+
+    Write-Host ""
+    Write-Host "===== SYSTEM CLOCK REPAIR =====" -ForegroundColor Cyan
+
+    if ((Get-CimInstance Win32_ComputerSystem).PartOfDomain) {
+        Write-Host "Domain-joined computer detected. Skipping clock repair." -ForegroundColor Yellow
+        return $false
+    }
+
+    try {
+
+        Write-Host "Current Time Source:" -ForegroundColor Yellow
+        w32tm /query /source
+
+        Write-Host ""
+        Write-Host "Configuring NTP Servers..." -ForegroundColor Yellow
+
+        w32tm /config /manualpeerlist:"0.pool.ntp.org,1.pool.ntp.org"
+        w32tm /config /syncfromflags:manual
+        w32tm /config /update
+
+        Write-Host ""
+        Write-Host "Restarting Windows Time Service..." -ForegroundColor Yellow
+
+        net stop w32time
+
+        w32tm /unregister
+        w32tm /register
+
+        net start w32time
+
+        Write-Host ""
+        Write-Host "Forcing Time Synchronization..." -ForegroundColor Yellow
+
+        w32tm /resync
+
+        Write-Host ""
+        Write-Host "Updated Time Source:" -ForegroundColor Yellow
+        w32tm /query /source
+
+        Write-Host ""
+        Write-Host "Clock Repair Completed" -ForegroundColor Green
+
+        return $true
+    }
+    catch {
+
+        Write-Host $_.Exception.Message -ForegroundColor Red
+
+        return $false
+    }
+}
+
 # ============================================================
 # MENU
 # ============================================================
@@ -303,19 +357,20 @@ do {
     Write-Host "======================================" -ForegroundColor Cyan
     Write-Host ""
 
-    Write-Host "1. Repair Windows" -ForegroundColor Yellow
-    Write-Host "2. Update Windows" -ForegroundColor Yellow
-    Write-Host "3. Repair + Update Windows" -ForegroundColor Yellow
-    Write-Host "4. Update Applications" -ForegroundColor Yellow
-    Write-Host "5. Reset Print Spooler" -ForegroundColor Yellow
-    Write-Host "6. Run All" -ForegroundColor Yellow
-    Write-Host "7. Exit" -ForegroundColor Yellow
+    Write-Host " 1. Repair Windows"         -ForegroundColor Yellow
+    Write-Host " 2. Update Windows"         -ForegroundColor Yellow
+    Write-Host " 3. Repair + Update Windows"-ForegroundColor Yellow
+    Write-Host " 4. Update Applications"    -ForegroundColor Yellow
+    Write-Host " 5. Reset Print Spooler"    -ForegroundColor Yellow
+    Write-Host " 6. Repair System Clock"    -ForegroundColor Yellow
+    Write-Host " 7. Run All"                -ForegroundColor Yellow
+    Write-Host " 8. Exit"                   -ForegroundColor Yellow
     Write-Host ""
 
     do {
-        $Selection = Read-Host "Select an option (1-7)"
+        $Selection = Read-Host "Select an option (1-8)"
     }
-    until ($Selection -in @("1","2","3","4","5","6","7"))
+    until ($Selection -in @("1","2","3","4","5","6","7","8"))
 
     $StartTime = Get-Date
 
@@ -323,6 +378,7 @@ do {
     [int]$UpdateCount = 0
     $SpoolerStatus = ""
     $AppsStatus = ""
+    $ClockStatus = ""
 
     switch ($Selection) {
 
@@ -349,19 +405,28 @@ do {
         }
 
         "6" {
+            $ClockStatus = if (Repair-SystemClock) { "Completed" } else { "Failed" }
+        }
+        
+        "7" {
+        
             $RepairStatus = Invoke-SystemRepair
-            $UpdateCount = [int](Invoke-WindowsUpdates | Select-Object -Last 1)
-
+        
+            $UpdateCount = Invoke-WindowsUpdates | Select-Object -Last 1
+        
             Invoke-ApplicationUpdates
             $AppsStatus = "Completed"
-
+        
             $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
+        
+            $ClockStatus = if (Repair-SystemClock) { "Completed" } else { "Failed" }
         }
-
-        "7" {
+        
+        "8" {
             Write-Host ""
             Write-Host "Exiting..." -ForegroundColor Yellow
-            break
+            Read-Host "Press Enter to close"
+            exit
         }
     }
 
@@ -383,6 +448,9 @@ do {
 
         if ($SpoolerStatus) {
             Write-Host "Spooler     : $SpoolerStatus"
+        }
+        if ($ClockStatus) {
+            Write-Host "Clock       : $ClockStatus"
         }
 
         if ($AppsStatus) {
