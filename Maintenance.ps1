@@ -293,77 +293,112 @@ function Get-RebootStatus {
 # MENU
 # ============================================================
 
-Write-Host ""
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host " Windows Maintenance Utility" -ForegroundColor Cyan
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host ""
+do {
 
-Write-Host "1. Repair Windows" -ForegroundColor Yellow
-Write-Host "2. Update Windows" -ForegroundColor Yellow
-Write-Host "3. Repair + Update Windows" -ForegroundColor Yellow
-Write-Host "4. Update Applications" -ForegroundColor Yellow
-Write-Host "5. Reset Print Spooler" -ForegroundColor Yellow
-Write-Host "6. Run All" -ForegroundColor Yellow
-Write-Host "7. Exit" -ForegroundColor Yellow
-Write-Host ""
+    Clear-Host
 
-while ($Selection -notmatch '^[1-7]$') {
-    $Selection = Read-Host "Select an option (1-7)"
-}
+    Write-Host ""
+    Write-Host "======================================" -ForegroundColor Cyan
+    Write-Host " Windows Maintenance Utility" -ForegroundColor Cyan
+    Write-Host "======================================" -ForegroundColor Cyan
+    Write-Host ""
 
-$StartTime = Get-Date
+    Write-Host "1. Repair Windows" -ForegroundColor Yellow
+    Write-Host "2. Update Windows" -ForegroundColor Yellow
+    Write-Host "3. Repair + Update Windows" -ForegroundColor Yellow
+    Write-Host "4. Update Applications" -ForegroundColor Yellow
+    Write-Host "5. Reset Print Spooler" -ForegroundColor Yellow
+    Write-Host "6. Run All" -ForegroundColor Yellow
+    Write-Host "7. Exit" -ForegroundColor Yellow
+    Write-Host ""
 
-$RepairStatus = ""
-[int]$UpdateCount = 0
-$SpoolerStatus = ""
-$AppsStatus = ""
+    do {
+        $Selection = Read-Host "Select an option (1-7)"
+    }
+    until ($Selection -in @("1","2","3","4","5","6","7"))
 
-switch ($Selection) {
+    $StartTime = Get-Date
 
-    "1" {
-        $RepairStatus = Invoke-SystemRepair
+    $RepairStatus = ""
+    [int]$UpdateCount = 0
+    $SpoolerStatus = ""
+    $AppsStatus = ""
+
+    switch ($Selection) {
+
+        "1" {
+            $RepairStatus = Invoke-SystemRepair
+        }
+
+        "2" {
+            $UpdateCount = [int](Invoke-WindowsUpdates | Select-Object -Last 1)
+        }
+
+        "3" {
+            $RepairStatus = Invoke-SystemRepair
+            $UpdateCount = [int](Invoke-WindowsUpdates | Select-Object -Last 1)
+        }
+
+        "4" {
+            Invoke-ApplicationUpdates
+            $AppsStatus = "Completed"
+        }
+
+        "5" {
+            $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
+        }
+
+        "6" {
+            $RepairStatus = Invoke-SystemRepair
+            $UpdateCount = [int](Invoke-WindowsUpdates | Select-Object -Last 1)
+
+            Invoke-ApplicationUpdates
+            $AppsStatus = "Completed"
+
+            $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
+        }
+
+        "7" {
+            Write-Host ""
+            Write-Host "Exiting..." -ForegroundColor Yellow
+            break
+        }
     }
 
-    "2" {
-        $UpdateCount = Invoke-WindowsUpdates
-    }
+    if ($Selection -ne "7") {
 
-    "3" {
-        $RepairStatus = Invoke-SystemRepair
-        $UpdateCount = Invoke-WindowsUpdates
-    }
+        $EndTime = Get-Date
 
-    "4" {
-        Invoke-ApplicationUpdates
-        $AppsStatus = "Completed"
-    }
-
-    "5" {
-        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
-    }
-
-    "6" {
-        $RepairStatus = Invoke-SystemRepair
-        $UpdateCount = Invoke-WindowsUpdates
-
-        $AppsStatus = if (Invoke-ApplicationUpdates) {
-                "Completed"
-            }
-            else {
-                "Failed"
-            }
-
-        $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
-    }
-
-    "7" {
         Write-Host ""
-        Write-Host "Exiting..." -ForegroundColor Yellow
-        Read-Host "Press Enter to close"
-        exit
+        Write-Host "======================================" -ForegroundColor Cyan
+        Write-Host " MAINTENANCE SUMMARY" -ForegroundColor Cyan
+        Write-Host "======================================" -ForegroundColor Cyan
+
+        Write-Host "Start Time  : $StartTime"
+        Write-Host "End Time    : $EndTime"
+
+        if ($RepairStatus) {
+            Write-Host "Repair      : $RepairStatus"
+        }
+
+        if ($SpoolerStatus) {
+            Write-Host "Spooler     : $SpoolerStatus"
+        }
+
+        if ($AppsStatus) {
+            Write-Host "Applications: $AppsStatus"
+        }
+
+        Write-Host "Updates     : $UpdateCount"
+
+        Write-Host ""
+        Read-Host "Press Enter to return to the menu"
     }
-}
+
+} while ($Selection -ne "7")
+
+Read-Host "Press Enter to close"
+
 
 # ============================================================
 # REBOOT STATUS
@@ -385,42 +420,4 @@ else {
 
     Write-Host "No Reboot Required" -ForegroundColor Green
 }
-
-# ============================================================
-# SUMMARY
-# ============================================================
-
-$EndTime = Get-Date
-
-Write-Host ""
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host " MAINTENANCE SUMMARY" -ForegroundColor Cyan
-Write-Host "======================================" -ForegroundColor Cyan
-
-Write-Host "Start Time  : $StartTime"
-Write-Host "End Time    : $EndTime"
-
-Write-Host ("Duration    : {0} Minutes" -f `
-        [math]::Round(($EndTime - $StartTime).TotalMinutes,2))
-
-if ($RepairStatus) {
-    Write-Host "Repair      : $RepairStatus"
-}
-
-if ($SpoolerStatus) {
-    Write-Host "Spooler     : $SpoolerStatus"
-}
-
-if ($AppsStatus) {
-    Write-Host "Applications: $AppsStatus"
-}
-
-Write-Host "Updates     : $UpdateCount"
-
-Write-Host "Reboot Req. : $RebootRequired"
-
-Write-Host ""
-Write-Host "======================================" -ForegroundColor Cyan
-Write-Host " Maintenance Complete" -ForegroundColor Cyan
-Write-Host "======================================" -ForegroundColor Cyan
 
