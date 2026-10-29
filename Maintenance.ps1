@@ -410,6 +410,24 @@ do {
         return
     }
 
+    Write-Host ""
+    Write-Host "Selected Actions:" -ForegroundColor Cyan
+    
+    $SelectedTasks | ForEach-Object {
+        Write-Host " - $_" -ForegroundColor Yellow
+    }
+    
+    Write-Host ""
+
+    $Confirm = Read-Host "Proceed? (Y/N)"
+
+    if ($Confirm -notmatch '^(Y|y)$') {
+    
+        Write-Host "Operation cancelled." -ForegroundColor Yellow
+        return
+    }
+
+
     $StartTime = Get-Date
 
     $RepairStatus = ""
