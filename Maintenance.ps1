@@ -363,14 +363,13 @@ do {
     Write-Host " 4. Update Applications"    -ForegroundColor Yellow
     Write-Host " 5. Reset Print Spooler"    -ForegroundColor Yellow
     Write-Host " 6. Repair System Clock"    -ForegroundColor Yellow
-    Write-Host " 7. Run All"                -ForegroundColor Yellow
-    Write-Host " 8. Exit"                   -ForegroundColor Yellow
+    Write-Host " 7. Exit"                   -ForegroundColor Yellow
     Write-Host ""
 
     do {
-        $Selection = Read-Host "Select an option (1-8)"
+        $Selection = Read-Host "Select an option (1-7)"
     }
-    until ($Selection -in @("1","2","3","4","5","6","7","8"))
+    until ($Selection -in @("1","2","3","4","5","6","7"))
 
     $StartTime = Get-Date
 
@@ -409,20 +408,6 @@ do {
         }
         
         "7" {
-        
-            $RepairStatus = Invoke-SystemRepair
-        
-            $UpdateCount = Invoke-WindowsUpdates | Select-Object -Last 1
-        
-            Invoke-ApplicationUpdates
-            $AppsStatus = "Completed"
-        
-            $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
-        
-            $ClockStatus = if (Repair-SystemClock) { "Completed" } else { "Failed" }
-        }
-        
-        "8" {
             Write-Host ""
             Write-Host "Exiting..." -ForegroundColor Yellow
             Read-Host "Press Enter to close"
