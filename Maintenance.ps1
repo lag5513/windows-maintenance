@@ -413,7 +413,7 @@ do {
     Write-Host ""
     Write-Host "Selected Actions:" -ForegroundColor Cyan
     
-    $SelectedTasks | ForEach-Object {
+    $Selections | ForEach-Object {
         Write-Host " - $_" -ForegroundColor Yellow
     }
     
