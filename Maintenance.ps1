@@ -293,50 +293,77 @@ function Repair-SystemClock {
 
     Write-Host ""
     Write-Host "===== SYSTEM CLOCK REPAIR =====" -ForegroundColor Cyan
-
-    if ((Get-CimInstance Win32_ComputerSystem).PartOfDomain) {
-        Write-Host "Domain-joined computer detected. Skipping clock repair." -ForegroundColor Yellow
-        return $false
-    }
+    Write-Host ""
 
     try {
 
+        $CurrentSource = (w32tm /query /source 2>&1)
+
         Write-Host "Current Time Source:" -ForegroundColor Yellow
-        w32tm /query /source
-
+        Write-Host "   $CurrentSource" -ForegroundColor Green
         Write-Host ""
-        Write-Host "Configuring NTP Servers..." -ForegroundColor Yellow
 
-        w32tm /config /manualpeerlist:"0.pool.ntp.org,1.pool.ntp.org"
-        w32tm /config /syncfromflags:manual
-        w32tm /config /update
+        $Proceed = Read-Host "Do you want to repair Windows Time Service? (Y/N)"
+
+        if ($Proceed -notmatch '^(Y|y)$') {
+
+            Write-Host "Clock repair cancelled." -ForegroundColor Yellow
+            return $false
+        }
+
+        $DomainJoined = (Get-CimInstance Win32_ComputerSystem).PartOfDomain
 
         Write-Host ""
         Write-Host "Restarting Windows Time Service..." -ForegroundColor Yellow
 
-        net stop w32time
+        Stop-Service w32time -Force -ErrorAction SilentlyContinue
 
-        w32tm /unregister
-        w32tm /register
+        w32tm /unregister | Out-Null
+        w32tm /register | Out-Null
 
-        net start w32time
+        Start-Service w32time
+
+        if ($DomainJoined) {
+
+            Write-Host ""
+            Write-Host "Domain-joined computer detected." -ForegroundColor Cyan
+            Write-Host "Configuring domain hierarchy synchronization..." -ForegroundColor Yellow
+
+            w32tm /config /syncfromflags:domhier
+            w32tm /config /update
+
+        }
+        else {
+
+            Write-Host ""
+            Write-Host "Standalone computer detected." -ForegroundColor Cyan
+            Write-Host "Configuring public NTP servers..." -ForegroundColor Yellow
+
+            w32tm /config /manualpeerlist:"0.pool.ntp.org,1.pool.ntp.org" | Out-Null
+            w32tm /config /syncfromflags:manual | Out-Null
+            w32tm /config /update | Out-Null
+        }
 
         Write-Host ""
-        Write-Host "Forcing Time Synchronization..." -ForegroundColor Yellow
+        Write-Host "Forcing time synchronization..." -ForegroundColor Yellow
 
         w32tm /resync
 
+        Start-Sleep -Seconds 3
+
         Write-Host ""
         Write-Host "Updated Time Source:" -ForegroundColor Yellow
+
         w32tm /query /source
 
         Write-Host ""
-        Write-Host "Clock Repair Completed" -ForegroundColor Green
+        Write-Host "Clock repair completed successfully." -ForegroundColor Green
 
         return $true
     }
     catch {
 
+        Write-Host ""
         Write-Host $_.Exception.Message -ForegroundColor Red
 
         return $false
