@@ -393,10 +393,22 @@ do {
     Write-Host " 7. Exit"                   -ForegroundColor Yellow
     Write-Host ""
 
-    do {
-        $Selection = Read-Host "Select an option (1-7)"
+    $ValidOptions = @("1","2","3","4","5","6","7")
+
+    $Selections = (
+        (Read-Host "Select option(s) (example: 1,2,5)") -split ','
+    ).Trim() | Select-Object -Unique
+    
+    $InvalidOptions = $Selections | Where-Object { $_ -notin $ValidOptions }
+    
+    if ($InvalidOptions) {
+    
+        Write-Host ""
+        Write-Host "Invalid option(s): $($InvalidOptions -join ', ')" -ForegroundColor Red
+        Read-Host "Press Enter to continue"
+    
+        return
     }
-    until ($Selection -in @("1","2","3","4","5","6","7"))
 
     $StartTime = Get-Date
 
@@ -406,6 +418,8 @@ do {
     $AppsStatus = ""
     $ClockStatus = ""
 
+    foreach ($Selection in $Selections) {
+
     switch ($Selection) {
 
         "1" {
@@ -413,12 +427,12 @@ do {
         }
 
         "2" {
-            $UpdateCount = [int](Invoke-WindowsUpdates | Select-Object -Last 1)
+            $UpdateCount = Invoke-WindowsUpdates | Select-Object -Last 1
         }
 
         "3" {
             $RepairStatus = Invoke-SystemRepair
-            $UpdateCount = [int](Invoke-WindowsUpdates | Select-Object -Last 1)
+            $UpdateCount = Invoke-WindowsUpdates | Select-Object -Last 1
         }
 
         "4" {
@@ -433,14 +447,12 @@ do {
         "6" {
             $ClockStatus = if (Repair-SystemClock) { "Completed" } else { "Failed" }
         }
-        
+
         "7" {
-            Write-Host ""
-            Write-Host "Exiting..." -ForegroundColor Yellow
-            Read-Host "Press Enter to close"
             exit
         }
     }
+}
 
     if ($Selection -ne "7") {
 
