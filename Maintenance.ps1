@@ -207,12 +207,31 @@ function Invoke-WindowsUpdates {
         $Updates = @(Get-WindowsUpdate -MicrosoftUpdate -ErrorAction Stop)
 
         if ($Updates.Count -gt 0) {
-            $Count = $Updates.Count
+            $AvailableUpdates = @(
+                foreach ($Update in $Updates) {
+                    $KbValues = @($Update.KB)
+                    $SizeValues = @($Update.Size)
+                    $TitleValues = @($Update.Title)
+                    $RowCount = [Math]::Max(
+                        $KbValues.Count,
+                        [Math]::Max($SizeValues.Count, $TitleValues.Count)
+                    )
+
+                    for ($Index = 0; $Index -lt $RowCount; $Index++) {
+                        [pscustomobject]@{
+                            KB = if ($Index -lt $KbValues.Count) { $KbValues[$Index] } else { "" }
+                            Size = if ($Index -lt $SizeValues.Count) { $SizeValues[$Index] } else { "" }
+                            Title = if ($Index -lt $TitleValues.Count) { $TitleValues[$Index] } else { "" }
+                        }
+                    }
+                }
+            )
+            $Count = $AvailableUpdates.Count
 
             Write-Host ""
             Write-Host "Available updates:" -ForegroundColor Cyan
 
-            foreach ($Update in $Updates) {
+            foreach ($Update in $AvailableUpdates) {
                 Write-Host ("  {0}  {1}  {2}" -f $Update.KB, $Update.Size, $Update.Title)
             }
 
