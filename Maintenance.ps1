@@ -406,6 +406,87 @@ function Repair-SystemClock {
     }
 }
 
+function Test-DiskHealth {
+
+    Write-Host ""
+    Write-Host "===== DISK HEALTH CHECK =====" -ForegroundColor Cyan
+
+    $IssuesFound = $false
+    $CheckFailed = $false
+
+    try {
+        $PhysicalDisks = @(Get-PhysicalDisk -ErrorAction Stop)
+
+        if ($PhysicalDisks.Count -gt 0) {
+            Write-Host "Physical disk status:" -ForegroundColor Yellow
+
+            foreach ($Disk in $PhysicalDisks) {
+                $OperationalStatus = @($Disk.OperationalStatus) -join ", "
+                Write-Host ("  {0}: Health={1}; Operational={2}" -f $Disk.FriendlyName, $Disk.HealthStatus, $OperationalStatus)
+
+                if ($Disk.HealthStatus -in @("Warning", "Unhealthy") -or
+                    $OperationalStatus -match "Degraded|Lost Communication|Failed") {
+                    $IssuesFound = $true
+                }
+            }
+        }
+        else {
+            Write-Host "No physical disks were reported by Windows Storage Management." -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "Unable to query physical disk status: $($_.Exception.Message)" -ForegroundColor Red
+        $CheckFailed = $true
+    }
+
+    try {
+        $Volumes = @(
+            Get-Volume -ErrorAction Stop |
+                Where-Object { $_.DriveLetter -and $_.FileSystem -eq "NTFS" }
+        )
+
+        if ($Volumes.Count -eq 0) {
+            Write-Host "No drive-letter NTFS volumes found for an online file-system scan." -ForegroundColor Yellow
+            $CheckFailed = $true
+        }
+
+        foreach ($Volume in $Volumes) {
+            $Drive = "$($Volume.DriveLetter):"
+            Write-Host ""
+            Write-Host "Scanning $Drive with CHKDSK..." -ForegroundColor Yellow
+
+            try {
+                & chkdsk.exe $Drive /scan 2>&1 | Out-Host
+
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "CHKDSK reported a problem on $Drive (exit code $LASTEXITCODE)." -ForegroundColor Red
+                    $IssuesFound = $true
+                }
+            }
+            catch {
+                Write-Host "Unable to scan $Drive`: $($_.Exception.Message)" -ForegroundColor Red
+                $CheckFailed = $true
+            }
+        }
+    }
+    catch {
+        Write-Host "Unable to enumerate volumes: $($_.Exception.Message)" -ForegroundColor Red
+        $CheckFailed = $true
+    }
+
+    if ($IssuesFound) {
+        Write-Host "Disk health check found issues." -ForegroundColor Red
+        return "Issues Found"
+    }
+
+    if ($CheckFailed) {
+        return "Check Incomplete"
+    }
+
+    Write-Host "Disk health check completed." -ForegroundColor Green
+    return "Healthy"
+}
+
 # ============================================================
 # MENU
 # ============================================================
@@ -426,13 +507,14 @@ do {
     Write-Host " 4. Update Applications"    -ForegroundColor Yellow
     Write-Host " 5. Reset Print Spooler"    -ForegroundColor Yellow
     Write-Host " 6. Repair System Clock"    -ForegroundColor Yellow
-    Write-Host " 7. Exit"                   -ForegroundColor Yellow
+    Write-Host " 7. Check Disk Health"      -ForegroundColor Yellow
+    Write-Host " 8. Exit"                   -ForegroundColor Yellow
     Write-Host ""
 
-    $ValidOptions = @("1","2","3","4","5","6","7")
+    $ValidOptions = @("1","2","3","4","5","6","7","8")
 
     $Selections = (
-        (Read-Host "Select option(s) (example: 1,2,5)") -split ','
+        (Read-Host "Select option(s) (example: 1,2,5,7)") -split ','
     ).Trim() | Select-Object -Unique
     
     $InvalidOptions = $Selections | Where-Object { $_ -notin $ValidOptions }
@@ -452,6 +534,7 @@ do {
     $SpoolerStatus = ""
     $AppsStatus = ""
     $ClockStatus = ""
+    $DiskStatus = ""
 
     foreach ($Selection in $Selections) {
 
@@ -484,12 +567,16 @@ do {
         }
 
         "7" {
+            $DiskStatus = Test-DiskHealth
+        }
+
+        "8" {
             exit
         }
     }
 }
 
-    if ($Selection -ne "7") {
+    if ($Selection -ne "8") {
 
         $EndTime = Get-Date
 
@@ -512,6 +599,10 @@ do {
             Write-Host "Clock       : $ClockStatus"
         }
 
+        if ($DiskStatus) {
+            Write-Host "Disk Health : $DiskStatus"
+        }
+
         if ($AppsStatus) {
             Write-Host "Applications: $AppsStatus"
         }
@@ -522,7 +613,7 @@ do {
         Read-Host "Press Enter to return to the menu"
     }
 
-} while ($Selection -ne "7")
+} while ($Selection -ne "8")
 
 Read-Host "Press Enter to close"
 
