@@ -351,7 +351,6 @@ function Invoke-WindowsUpdates {
             Write-Host "Installing updates..." -ForegroundColor Yellow
 
             $InstallationSucceeded = Invoke-WindowsUpdateInstallationWithReset
-            Remove-WindowsUpdateBackupFolders
 
             if (-not $InstallationSucceeded) {
                 return 0
@@ -367,6 +366,9 @@ function Invoke-WindowsUpdates {
 
         Write-Host $_.Exception.Message -ForegroundColor Red
         return 0
+    }
+    finally {
+        Remove-WindowsUpdateBackupFolders
     }
 }
 
