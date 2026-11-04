@@ -173,20 +173,35 @@ function Invoke-WindowsUpdateInstallation {
 
 function Remove-WindowsUpdateBackupFolders {
 
-    $BackupFolders = @(
-        (Join-Path $env:SystemRoot "SoftwareDistribution.bak"),
-        (Join-Path $env:SystemRoot "System32\catroot2.bak")
+    $BackupLocations = @(
+        @{
+            Parent = $env:SystemRoot
+            Pattern = '^SoftwareDistribution\.bak\d*$'
+        },
+        @{
+            Parent = Join-Path $env:SystemRoot "System32"
+            Pattern = '^catroot2\.bak\d*$'
+        }
     )
 
-    foreach ($BackupFolder in $BackupFolders) {
-        if (Test-Path -LiteralPath $BackupFolder -PathType Container) {
-            try {
-                Remove-Item -LiteralPath $BackupFolder -Recurse -Force -ErrorAction Stop
-                Write-Host "Removed Windows Update backup folder: $BackupFolder" -ForegroundColor Green
+    foreach ($Location in $BackupLocations) {
+        try {
+            $BackupFolders = @(
+                Get-ChildItem `
+                    -LiteralPath $Location.Parent `
+                    -Directory `
+                    -Force `
+                    -ErrorAction Stop |
+                    Where-Object { $_.Name -match $Location.Pattern }
+            )
+
+            foreach ($BackupFolder in $BackupFolders) {
+                Remove-Item -LiteralPath $BackupFolder.FullName -Recurse -Force -ErrorAction Stop
+                Write-Host "Removed Windows Update backup folder: $($BackupFolder.FullName)" -ForegroundColor Green
             }
-            catch {
-                Write-Host "Unable to remove Windows Update backup folder '$BackupFolder': $($_.Exception.Message)" -ForegroundColor Red
-            }
+        }
+        catch {
+            Write-Host "Unable to clean Windows Update backup folders in '$($Location.Parent)': $($_.Exception.Message)" -ForegroundColor Red
         }
     }
 }
