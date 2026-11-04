@@ -204,19 +204,25 @@ function Invoke-WindowsUpdates {
 
         Write-Host "Scanning for Updates..." -ForegroundColor Yellow
 
-        $Updates = Get-WindowsUpdate -MicrosoftUpdate -ErrorAction SilentlyContinue
+        $Updates = @(Get-WindowsUpdate -MicrosoftUpdate -ErrorAction Stop)
 
-        if ($Updates) {
-            $Count = @($Updates).Count
+        if ($Updates.Count -gt 0) {
+            $Count = $Updates.Count
+
+            $Updates |
+                Format-Table -AutoSize |
+                Out-Host
 
             Write-Host "$($Count) Update(s) Found" -ForegroundColor Green
+            Write-Host "Installing updates..." -ForegroundColor Yellow
 
             Install-WindowsUpdate `
                 -MicrosoftUpdate `
                 -AcceptAll `
                 -IgnoreReboot `
                 -Confirm:$false `
-                -Verbose | Out-Null
+                -Verbose |
+                Out-Host
 
             return $Count
         }
