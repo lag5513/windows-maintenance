@@ -924,7 +924,9 @@ do {
             Write-Host "Applications: $AppsStatus"
         }
 
-        Write-Host "Updates     : $UpdateCount"
+        if ($Selections -contains "2" -or $Selections -contains "3") {
+            Write-Host "Updates     : $UpdateCount"
+        }
 
         Write-Host ""
         Read-Host "Press Enter to return to the menu"
