@@ -134,6 +134,94 @@ function Reset-PrintSpooler {
     }
 }
 
+function Invoke-WindowsUpdateInstallation {
+
+    $InstallResults = @(
+        Install-WindowsUpdate `
+            -AcceptAll `
+            -IgnoreReboot `
+            -Confirm:$false `
+            -Verbose `
+            -ErrorAction Stop
+    )
+
+    if ($InstallResults.Count -gt 0) {
+        $InstallResults | Out-Host
+    }
+
+    $FailedResults = @(
+        $InstallResults |
+            Where-Object {
+                $Status = [string]$_.Status
+                if (-not $Status) {
+                    $Status = [string]$_.Result
+                }
+
+                $Status -match '^(Failed|Failure|Error|Aborted|Cancelled|Canceled)(\b|$)'
+            }
+    )
+
+    if ($FailedResults.Count -gt 0) {
+        $FailedResults | Out-Host
+        throw "$($FailedResults.Count) update(s) failed to install."
+    }
+
+    if ($InstallResults.Count -eq 0) {
+        throw "Install-WindowsUpdate returned no installation results."
+    }
+}
+
+function Remove-WindowsUpdateBackupFolders {
+
+    $BackupFolders = @(
+        (Join-Path $env:SystemRoot "SoftwareDistribution.bak"),
+        (Join-Path $env:SystemRoot "System32\catroot2.bak")
+    )
+
+    foreach ($BackupFolder in $BackupFolders) {
+        if (Test-Path -LiteralPath $BackupFolder -PathType Container) {
+            try {
+                Remove-Item -LiteralPath $BackupFolder -Recurse -Force -ErrorAction Stop
+                Write-Host "Removed Windows Update backup folder: $BackupFolder" -ForegroundColor Green
+            }
+            catch {
+                Write-Host "Unable to remove Windows Update backup folder '$BackupFolder': $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+    }
+}
+
+function Invoke-WindowsUpdateInstallationWithReset {
+
+    try {
+        Invoke-WindowsUpdateInstallation
+        return $true
+    }
+    catch {
+        Write-Host "Update installation failed: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Resetting Windows Update components before one retry..." -ForegroundColor Yellow
+    }
+
+    $RetrySucceeded = $false
+
+    try {
+        if (-not (Get-Command Reset-WUComponents -ErrorAction SilentlyContinue)) {
+            throw "Reset-WUComponents is not available in the installed PSWindowsUpdate module."
+        }
+
+        Reset-WUComponents -Verbose -ErrorAction Stop | Out-Host
+
+        Write-Host "Retrying Windows update installation once..." -ForegroundColor Yellow
+        Invoke-WindowsUpdateInstallation
+        $RetrySucceeded = $true
+    }
+    catch {
+        Write-Host "Windows update installation failed after resetting components and one retry: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    return $RetrySucceeded
+}
+
 function Invoke-WindowsUpdates {
 
     Write-Host ""
@@ -247,12 +335,12 @@ function Invoke-WindowsUpdates {
             Read-Host "Press Enter to install these updates"
             Write-Host "Installing updates..." -ForegroundColor Yellow
 
-            Install-WindowsUpdate `
-                -AcceptAll `
-                -IgnoreReboot `
-                -Confirm:$false `
-                -Verbose |
-                Out-Host
+            $InstallationSucceeded = Invoke-WindowsUpdateInstallationWithReset
+            Remove-WindowsUpdateBackupFolders
+
+            if (-not $InstallationSucceeded) {
+                return 0
+            }
 
             return $Count
         }
