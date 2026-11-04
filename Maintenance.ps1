@@ -209,11 +209,15 @@ function Invoke-WindowsUpdates {
         if ($Updates.Count -gt 0) {
             $Count = $Updates.Count
 
-            $Updates |
-                Format-Table -AutoSize |
-                Out-Host
+            Write-Host ""
+            Write-Host "Available updates:" -ForegroundColor Cyan
+
+            foreach ($Update in $Updates) {
+                Write-Host ("  {0}  {1}  {2}" -f $Update.KB, $Update.Size, $Update.Title)
+            }
 
             Write-Host "$($Count) Update(s) Found" -ForegroundColor Green
+            Read-Host "Press Enter to install these updates"
             Write-Host "Installing updates..." -ForegroundColor Yellow
 
             Install-WindowsUpdate `
