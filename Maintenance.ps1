@@ -146,19 +146,35 @@ function Invoke-WindowsUpdates {
             -InstallationPolicy Trusted `
             -ErrorAction SilentlyContinue
 
-        if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+        $MinimumNuGetVersion = [version]"2.8.5.201"
+        $NuGetProvider = Get-PackageProvider `
+            -Name NuGet `
+            -ListAvailable `
+            -ErrorAction SilentlyContinue |
+            Where-Object { $_.Version -ge $MinimumNuGetVersion } |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
+
+        if (-not $NuGetProvider) {
         
             Write-Host "Installing NuGet provider..." -ForegroundColor Yellow
         
             Install-PackageProvider `
                 -Name NuGet `
-                -MinimumVersion 2.8.5.201 `
+                -MinimumVersion $MinimumNuGetVersion `
                 -Force `
+                -ForceBootstrap `
                 -Scope CurrentUser `
-                -Confirm:$false
-        
-            Import-PackageProvider NuGet -Force
+                -Confirm:$false `
+                -ErrorAction Stop
         }
+
+        Import-PackageProvider `
+            -Name NuGet `
+            -MinimumVersion $MinimumNuGetVersion `
+            -Force `
+            -ErrorAction Stop |
+            Out-Null
         
         Write-Host "NuGet provider ready." -ForegroundColor Green
 
