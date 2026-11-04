@@ -55,15 +55,15 @@ function Invoke-SystemRepair {
     Write-Host ""
     Write-Host "[2/4] Running DISM CheckHealth..." -ForegroundColor Yellow
 
-   $CheckHealthOutput = & DISM.exe `
-    /Online `
-    /Cleanup-Image `
-    /CheckHealth 2>&1 |
-    Out-String
+    & DISM.exe `
+        /Online `
+        /Cleanup-Image `
+        /CheckHealth 2>&1 |
+        Tee-Object -Variable CheckHealthOutput |
+        Out-Host
 
-    $CorruptionDetected = $false
-
-    $CorruptionDetected = $CheckHealthOutput -match "repairable"
+    $CheckHealthText = $CheckHealthOutput | Out-String
+    $CorruptionDetected = $CheckHealthText -match "repairable"
     
     if ($CorruptionDetected) {
     
@@ -511,4 +511,3 @@ else {
 
     Write-Host "No Reboot Required" -ForegroundColor Green
 }
-
