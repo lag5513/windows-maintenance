@@ -210,17 +210,9 @@ function Invoke-WindowsUpdates {
             throw "PSWindowsUpdate module not found."
         }
 
-        try {
-            Add-WUServiceManager `
-                -MicrosoftUpdate `
-                -Confirm:$false `
-                -ErrorAction SilentlyContinue | Out-Null
-        }
-        catch {}
+        Write-Host "Scanning Windows Update for Updates..." -ForegroundColor Yellow
 
-        Write-Host "Scanning for Updates..." -ForegroundColor Yellow
-
-        $Updates = @(Get-WindowsUpdate -MicrosoftUpdate -ErrorAction Stop)
+        $Updates = @(Get-WindowsUpdate -ErrorAction Stop)
 
         if ($Updates.Count -gt 0) {
             $AvailableUpdates = @(
@@ -256,7 +248,6 @@ function Invoke-WindowsUpdates {
             Write-Host "Installing updates..." -ForegroundColor Yellow
 
             Install-WindowsUpdate `
-                -MicrosoftUpdate `
                 -AcceptAll `
                 -IgnoreReboot `
                 -Confirm:$false `
