@@ -487,6 +487,208 @@ function Test-DiskHealth {
     return "Healthy"
 }
 
+function Get-PageFileStatus {
+
+    Write-Host ""
+    Write-Host "===== PAGE FILE CHECK =====" -ForegroundColor Cyan
+
+    try {
+        $ComputerSystem = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
+        $PageFiles = @(Get-CimInstance -ClassName Win32_PageFileUsage -ErrorAction Stop)
+
+        Write-Host ("Automatically managed: {0}" -f $ComputerSystem.AutomaticManagedPagefile)
+
+        if ($PageFiles.Count -eq 0) {
+            Write-Host "Windows did not report an active page file." -ForegroundColor Yellow
+            return "Not Active"
+        }
+
+        foreach ($PageFile in $PageFiles) {
+            Write-Host ("Page file: {0}" -f $PageFile.Name) -ForegroundColor Yellow
+            Write-Host ("  Allocated: {0} MB" -f $PageFile.AllocatedBaseSize)
+            Write-Host ("  In use:    {0} MB" -f $PageFile.CurrentUsage)
+            Write-Host ("  Peak use:  {0} MB" -f $PageFile.PeakUsage)
+            Write-Host ("  Temporary: {0}" -f $PageFile.TempPageFile)
+        }
+
+        return "Active"
+    }
+    catch {
+        Write-Host "Unable to query page file status: $($_.Exception.Message)" -ForegroundColor Red
+        return "Check Failed"
+    }
+}
+
+function Set-RecommendedPageFileSize {
+
+    Write-Host ""
+    Write-Host "===== INCREASE PAGE FILE SIZE =====" -ForegroundColor Cyan
+
+    try {
+        $ComputerSystem = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
+        $InstalledMemoryMB = [Math]::Ceiling($ComputerSystem.TotalPhysicalMemory / 1MB)
+
+        if ($InstalledMemoryMB -le 0) {
+            throw "Windows did not report a valid installed memory size."
+        }
+
+        $InitialSizeMB = [long]($InstalledMemoryMB * 2)
+        $MaximumSizeMB = [long]($InstalledMemoryMB * 3)
+
+        if ($MaximumSizeMB -gt [uint32]::MaxValue) {
+            throw "The recommended page file size is outside the range Windows can configure."
+        }
+
+        $PageFileSettings = @(Get-CimInstance -ClassName Win32_PageFileSetting -ErrorAction Stop)
+
+        if ($PageFileSettings.Count -gt 1) {
+            throw "Multiple page file locations are configured. This option will not change them automatically."
+        }
+
+        if ($PageFileSettings.Count -eq 1) {
+            $PageFilePath = $PageFileSettings[0].Name
+        }
+        else {
+            $PageFilePath = Join-Path $env:SystemDrive "pagefile.sys"
+        }
+
+        Write-Host ("Installed RAM: {0:N0} MB" -f $InstalledMemoryMB)
+        Write-Host ("Recommended initial size: {0:N0} MB (2x RAM)" -f $InitialSizeMB)
+        Write-Host ("Recommended maximum size: {0:N0} MB (3x RAM)" -f $MaximumSizeMB)
+        Write-Host ("Page file location: {0}" -f $PageFilePath)
+
+        if ($ComputerSystem.AutomaticManagedPagefile) {
+            Write-Host "Applying this size will turn off automatic page file management." -ForegroundColor Yellow
+        }
+
+        $Proceed = Read-Host "Apply these settings? A restart will be required (Y/N)"
+        if ($Proceed -notmatch '^(Y|y)$') {
+            Write-Host "Page file change cancelled." -ForegroundColor Yellow
+            return "Cancelled"
+        }
+
+        $PreviousAutomaticManagement = [bool]$ComputerSystem.AutomaticManagedPagefile
+        $PreviousPageFileSetting = if ($PageFileSettings.Count -eq 1) {
+            $PageFileSettings[0]
+        }
+        else {
+            $null
+        }
+        $PreviousInitialSizeMB = if ($PreviousPageFileSetting) {
+            $PreviousPageFileSetting.InitialSize
+        }
+        else {
+            $null
+        }
+        $PreviousMaximumSizeMB = if ($PreviousPageFileSetting) {
+            $PreviousPageFileSetting.MaximumSize
+        }
+        else {
+            $null
+        }
+        $PageFileSetting = $null
+
+        try {
+            if ($PreviousAutomaticManagement) {
+                Set-CimInstance `
+                    -InputObject $ComputerSystem `
+                    -Property @{ AutomaticManagedPagefile = $false } `
+                    -ErrorAction Stop |
+                    Out-Null
+            }
+
+            if ($PreviousPageFileSetting) {
+                $PageFileSetting = Set-CimInstance `
+                    -InputObject $PreviousPageFileSetting `
+                    -Property @{
+                        InitialSize = $InitialSizeMB
+                        MaximumSize = $MaximumSizeMB
+                    } `
+                    -ErrorAction Stop
+            }
+            else {
+                $PageFileSetting = New-CimInstance `
+                    -ClassName Win32_PageFileSetting `
+                    -Property @{
+                        Name = $PageFilePath
+                        InitialSize = $InitialSizeMB
+                        MaximumSize = $MaximumSizeMB
+                    } `
+                    -ErrorAction Stop
+            }
+
+            $VerifiedSetting = Get-CimInstance `
+                -ClassName Win32_PageFileSetting `
+                -ErrorAction Stop |
+                Where-Object { $_.Name -eq $PageFilePath }
+
+            if (-not $VerifiedSetting -or
+                $VerifiedSetting.InitialSize -ne $InitialSizeMB -or
+                $VerifiedSetting.MaximumSize -ne $MaximumSizeMB) {
+                throw "Windows did not report the requested page file settings after the change."
+            }
+        }
+        catch {
+            if ($PreviousPageFileSetting) {
+                try {
+                    Set-CimInstance `
+                        -InputObject $PreviousPageFileSetting `
+                        -Property @{
+                            InitialSize = $PreviousInitialSizeMB
+                            MaximumSize = $PreviousMaximumSizeMB
+                        } `
+                        -ErrorAction Stop |
+                        Out-Null
+                }
+                catch {
+                    Write-Host "WARNING: Failed to restore the previous page file size: $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+            elseif ($PageFileSetting) {
+                try {
+                    Remove-CimInstance -InputObject $PageFileSetting -ErrorAction Stop
+                }
+                catch {
+                    Write-Host "WARNING: Failed to remove the new page file setting: $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+
+            if ($PreviousAutomaticManagement) {
+                try {
+                    Set-CimInstance `
+                        -InputObject $ComputerSystem `
+                        -Property @{ AutomaticManagedPagefile = $true } `
+                        -ErrorAction Stop |
+                        Out-Null
+                }
+                catch {
+                    Write-Host "WARNING: Failed to restore automatic page file management: $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+
+            throw
+        }
+
+        Write-Host "Page file size updated. Restart Windows for the change to take effect." -ForegroundColor Green
+        return "Updated - Restart Required"
+    }
+    catch {
+        Write-Host "Unable to update page file size: $($_.Exception.Message)" -ForegroundColor Red
+        return "Update Failed"
+    }
+}
+
+function Invoke-PageFileManagement {
+
+    $CurrentStatus = Get-PageFileStatus
+    if ($CurrentStatus -eq "Check Failed") {
+        return "Check Failed"
+    }
+
+    $ChangeStatus = Set-RecommendedPageFileSize
+    return "Check: $CurrentStatus; Size change: $ChangeStatus"
+}
+
 # ============================================================
 # MENU
 # ============================================================
@@ -508,13 +710,14 @@ do {
     Write-Host " 5. Reset Print Spooler"    -ForegroundColor Yellow
     Write-Host " 6. Repair System Clock"    -ForegroundColor Yellow
     Write-Host " 7. Check Disk Health"      -ForegroundColor Yellow
-    Write-Host " 8. Exit"                   -ForegroundColor Yellow
+    Write-Host " 8. Check Page File"        -ForegroundColor Yellow
+    Write-Host " 9. Exit"                   -ForegroundColor Yellow
     Write-Host ""
 
-    $ValidOptions = @("1","2","3","4","5","6","7","8")
+    $ValidOptions = @("1","2","3","4","5","6","7","8","9")
 
     $Selections = (
-        (Read-Host "Select option(s) (example: 1,2,5,7)") -split ','
+        (Read-Host "Select option(s) (example: 1,2,5,7,8)") -split ','
     ).Trim() | Select-Object -Unique
     
     $InvalidOptions = $Selections | Where-Object { $_ -notin $ValidOptions }
@@ -535,6 +738,7 @@ do {
     $AppsStatus = ""
     $ClockStatus = ""
     $DiskStatus = ""
+    $PageFileStatus = ""
 
     foreach ($Selection in $Selections) {
 
@@ -571,12 +775,16 @@ do {
         }
 
         "8" {
+            $PageFileStatus = Invoke-PageFileManagement
+        }
+
+        "9" {
             exit
         }
     }
 }
 
-    if ($Selection -ne "8") {
+    if ($Selection -ne "9") {
 
         $EndTime = Get-Date
 
@@ -603,6 +811,10 @@ do {
             Write-Host "Disk Health : $DiskStatus"
         }
 
+        if ($PageFileStatus) {
+            Write-Host "Page File   : $PageFileStatus"
+        }
+
         if ($AppsStatus) {
             Write-Host "Applications: $AppsStatus"
         }
@@ -613,7 +825,7 @@ do {
         Read-Host "Press Enter to return to the menu"
     }
 
-} while ($Selection -ne "8")
+} while ($Selection -ne "9")
 
 Read-Host "Press Enter to close"
 
