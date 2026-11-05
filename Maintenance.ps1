@@ -532,7 +532,10 @@ function Test-DiskHealth {
 
                 if ($Disk.HealthStatus -in @("Warning", "Unhealthy") -or
                     $OperationalStatus -match "Degraded|Lost Communication|Failed") {
-                    $FailedDisks += $Disk.FriendlyName
+                    $FailedDisks += [PSCustomObject]@{
+                        Name = if ($Disk.FriendlyName) { $Disk.FriendlyName } else { "Unknown disk" }
+                        Size = $Disk.Size
+                    }
                     $IssuesFound = $true
                 }
             }
@@ -583,20 +586,24 @@ function Test-DiskHealth {
     }
 
     if ($IssuesFound) {
-        $IssueSummary = "Disk health check found issues."
-        if ($FailedDisks.Count -gt 0) {
-            $IssueSummary += " Affected disk(s): $($FailedDisks -join ', ')."
+        return [PSCustomObject]@{
+            Status = "Issues Found"
+            FailedDisks = @($FailedDisks)
         }
-        Write-Host $IssueSummary -ForegroundColor Red
-        return "Issues Found"
     }
 
     if ($CheckFailed) {
-        return "Check Incomplete"
+        return [PSCustomObject]@{
+            Status = "Check Incomplete"
+            FailedDisks = @($FailedDisks)
+        }
     }
 
     Write-Host "Disk health check completed." -ForegroundColor Green
-    return "Healthy"
+    return [PSCustomObject]@{
+        Status = "Healthy"
+        FailedDisks = @($FailedDisks)
+    }
 }
 
 function Get-PageFileStatus {
@@ -920,7 +927,16 @@ do {
         }
 
         if ($DiskStatus) {
-            Write-Host "Disk Health : $DiskStatus"
+            Write-Host "Disk Health : $($DiskStatus.Status)"
+            foreach ($Disk in $DiskStatus.FailedDisks) {
+                if ($Disk.Size -gt 0) {
+                    $DiskSize = "{0:N1} GB" -f ($Disk.Size / 1GB)
+                }
+                else {
+                    $DiskSize = "Size unavailable"
+                }
+                Write-Host "  Failed Disk: $($Disk.Name) ($DiskSize)" -ForegroundColor Red
+            }
         }
 
         if ($PageFileStatus) {
