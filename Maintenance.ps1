@@ -531,6 +531,7 @@ function Test-DiskHealth {
 
                 if ($Disk.HealthStatus -in @("Warning", "Unhealthy") -or
                     $OperationalStatus -match "Degraded|Lost Communication|Failed") {
+                    Write-Host ("Disk issue detected on {0}: Health={1}; Operational={2}" -f $Disk.FriendlyName, $Disk.HealthStatus, $OperationalStatus) -ForegroundColor Red
                     $IssuesFound = $true
                 }
             }
@@ -557,19 +558,20 @@ function Test-DiskHealth {
 
         foreach ($Volume in $Volumes) {
             $Drive = "$($Volume.DriveLetter):"
+            $VolumeName = if ($Volume.FileSystemLabel) { $Volume.FileSystemLabel } else { "Unlabeled volume" }
             Write-Host ""
-            Write-Host "Scanning $Drive with CHKDSK..." -ForegroundColor Yellow
+            Write-Host "Scanning $Drive ($VolumeName) with CHKDSK..." -ForegroundColor Yellow
 
             try {
                 & chkdsk.exe $Drive /scan 2>&1 | Out-Host
 
                 if ($LASTEXITCODE -ne 0) {
-                    Write-Host "CHKDSK reported a problem on $Drive (exit code $LASTEXITCODE)." -ForegroundColor Red
+                    Write-Host "CHKDSK reported a problem on $Drive ($VolumeName; exit code $LASTEXITCODE)." -ForegroundColor Red
                     $IssuesFound = $true
                 }
             }
             catch {
-                Write-Host "Unable to scan $Drive`: $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "Unable to scan $Drive ($VolumeName): $($_.Exception.Message)" -ForegroundColor Red
                 $CheckFailed = $true
             }
         }
