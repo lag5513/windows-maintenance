@@ -549,40 +549,49 @@ function Test-DiskHealth {
         $CheckFailed = $true
     }
 
-    try {
-        $Volumes = @(
-            Get-Volume -ErrorAction Stop |
-                Where-Object { $_.DriveLetter -and $_.FileSystem -eq "NTFS" }
-        )
+    if ($FailedDisks.Count -gt 0) {
+        $RunChkdsk = Read-Host "A disk health issue was detected. Run CHKDSK /scan on NTFS volumes? (Y/N)"
 
-        if ($Volumes.Count -eq 0) {
-            Write-Host "No drive-letter NTFS volumes found for an online file-system scan." -ForegroundColor Yellow
-            $CheckFailed = $true
-        }
-
-        foreach ($Volume in $Volumes) {
-            $Drive = "$($Volume.DriveLetter):"
-            $VolumeName = if ($Volume.FileSystemLabel) { $Volume.FileSystemLabel } else { "Unlabeled volume" }
-            Write-Host ""
-            Write-Host "Scanning $Drive ($VolumeName) with CHKDSK..." -ForegroundColor Yellow
-
+        if ($RunChkdsk -match '^(Y|YES)$') {
             try {
-                & chkdsk.exe $Drive /scan 2>&1 | Out-Host
+                $Volumes = @(
+                    Get-Volume -ErrorAction Stop |
+                        Where-Object { $_.DriveLetter -and $_.FileSystem -eq "NTFS" }
+                )
 
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Host "CHKDSK reported a problem on $Drive ($VolumeName; exit code $LASTEXITCODE)." -ForegroundColor Red
-                    $IssuesFound = $true
+                if ($Volumes.Count -eq 0) {
+                    Write-Host "No drive-letter NTFS volumes found for an online file-system scan." -ForegroundColor Yellow
+                    $CheckFailed = $true
+                }
+
+                foreach ($Volume in $Volumes) {
+                    $Drive = "$($Volume.DriveLetter):"
+                    $VolumeName = if ($Volume.FileSystemLabel) { $Volume.FileSystemLabel } else { "Unlabeled volume" }
+                    Write-Host ""
+                    Write-Host "Scanning $Drive ($VolumeName) with CHKDSK..." -ForegroundColor Yellow
+
+                    try {
+                        & chkdsk.exe $Drive /scan 2>&1 | Out-Host
+
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Host "CHKDSK reported a problem on $Drive ($VolumeName; exit code $LASTEXITCODE)." -ForegroundColor Red
+                            $IssuesFound = $true
+                        }
+                    }
+                    catch {
+                        Write-Host "Unable to scan $Drive ($VolumeName): $($_.Exception.Message)" -ForegroundColor Red
+                        $CheckFailed = $true
+                    }
                 }
             }
             catch {
-                Write-Host "Unable to scan $Drive ($VolumeName): $($_.Exception.Message)" -ForegroundColor Red
+                Write-Host "Unable to enumerate volumes: $($_.Exception.Message)" -ForegroundColor Red
                 $CheckFailed = $true
             }
         }
-    }
-    catch {
-        Write-Host "Unable to enumerate volumes: $($_.Exception.Message)" -ForegroundColor Red
-        $CheckFailed = $true
+        else {
+            Write-Host "CHKDSK scan skipped." -ForegroundColor Yellow
+        }
     }
 
     if ($IssuesFound) {
