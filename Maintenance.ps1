@@ -935,7 +935,7 @@ do {
                 else {
                     $DiskSize = "Size unavailable"
                 }
-                Write-Host "  Failed Disk: $($Disk.Name) ($DiskSize)" -ForegroundColor Red
+                Write-Host "Failed Disk: $($Disk.Name) ($DiskSize)" -ForegroundColor Red
             }
         }
 
