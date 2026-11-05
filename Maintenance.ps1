@@ -518,6 +518,7 @@ function Test-DiskHealth {
 
     $IssuesFound = $false
     $CheckFailed = $false
+    $FailedDisks = @()
 
     try {
         $PhysicalDisks = @(Get-PhysicalDisk -ErrorAction Stop)
@@ -531,7 +532,7 @@ function Test-DiskHealth {
 
                 if ($Disk.HealthStatus -in @("Warning", "Unhealthy") -or
                     $OperationalStatus -match "Degraded|Lost Communication|Failed") {
-                    Write-Host ("Disk issue detected on {0}: Health={1}; Operational={2}" -f $Disk.FriendlyName, $Disk.HealthStatus, $OperationalStatus) -ForegroundColor Red
+                    $FailedDisks += $Disk.FriendlyName
                     $IssuesFound = $true
                 }
             }
@@ -582,7 +583,11 @@ function Test-DiskHealth {
     }
 
     if ($IssuesFound) {
-        Write-Host "Disk health check found issues." -ForegroundColor Red
+        $IssueSummary = "Disk health check found issues."
+        if ($FailedDisks.Count -gt 0) {
+            $IssueSummary += " Affected disk(s): $($FailedDisks -join ', ')."
+        }
+        Write-Host $IssueSummary -ForegroundColor Red
         return "Issues Found"
     }
 
