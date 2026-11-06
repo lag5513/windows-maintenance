@@ -840,10 +840,10 @@ do {
     Write-Host " 7. Check Disk Health"      -ForegroundColor Yellow
     Write-Host " 8. Check Page File"        -ForegroundColor Yellow
     Write-Host " 9. Restart Computer"       -ForegroundColor Yellow
-    Write-Host "10. Exit"                   -ForegroundColor Yellow
+    Write-Host " 0. Exit"                   -ForegroundColor Yellow
     Write-Host ""
 
-    $ValidOptions = @("1","2","3","4","5","6","7","8","9","10")
+    $ValidOptions = @("0","1","2","3","4","5","6","7","8","9")
 
     $Selections = (
         (Read-Host "Select option(s) (example: 1,2,5,7,8)") -split ','
@@ -930,13 +930,13 @@ do {
             }
         }
 
-        "10" {
+        "0" {
             exit
         }
     }
 }
 
-    if ($Selection -ne "10") {
+    if ($Selection -ne "0") {
 
         $EndTime = Get-Date
 
@@ -988,7 +988,7 @@ do {
         Read-Host "Press Enter to return to the menu"
     }
 
-} while ($Selection -ne "10")
+} while ($Selection -ne "0")
 
 Read-Host "Press Enter to close"
 
