@@ -839,10 +839,11 @@ do {
     Write-Host " 6. Repair System Clock"    -ForegroundColor Yellow
     Write-Host " 7. Check Disk Health"      -ForegroundColor Yellow
     Write-Host " 8. Check Page File"        -ForegroundColor Yellow
-    Write-Host " 9. Exit"                   -ForegroundColor Yellow
+    Write-Host " 9. Restart Computer"       -ForegroundColor Yellow
+    Write-Host "10. Exit"                   -ForegroundColor Yellow
     Write-Host ""
 
-    $ValidOptions = @("1","2","3","4","5","6","7","8","9")
+    $ValidOptions = @("1","2","3","4","5","6","7","8","9","10")
 
     $Selections = (
         (Read-Host "Select option(s) (example: 1,2,5,7,8)") -split ','
@@ -857,6 +858,13 @@ do {
         Read-Host "Press Enter to continue"
     
         return
+    }
+
+    if ($Selections -contains "9" -and $Selections.Count -gt 1) {
+        Write-Host ""
+        Write-Host "Restart Computer must be selected by itself." -ForegroundColor Red
+        Read-Host "Press Enter to continue"
+        continue
     }
 
     $StartTime = Get-Date
@@ -907,12 +915,28 @@ do {
         }
 
         "9" {
+            $RestartConfirmation = Read-Host "Are you sure you want to restart this computer? (Y/N)"
+            if ($RestartConfirmation -match '^(Y|YES)$') {
+                try {
+                    Restart-Computer -ErrorAction Stop
+                    exit
+                }
+                catch {
+                    Write-Host "Unable to restart the computer: $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+            else {
+                Write-Host "Restart canceled." -ForegroundColor Yellow
+            }
+        }
+
+        "10" {
             exit
         }
     }
 }
 
-    if ($Selection -ne "9") {
+    if ($Selection -ne "10") {
 
         $EndTime = Get-Date
 
@@ -964,7 +988,7 @@ do {
         Read-Host "Press Enter to return to the menu"
     }
 
-} while ($Selection -ne "9")
+} while ($Selection -ne "10")
 
 Read-Host "Press Enter to close"
 
