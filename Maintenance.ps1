@@ -136,37 +136,34 @@ function Reset-PrintSpooler {
 
 function Invoke-WindowsUpdateInstallation {
 
-    $InstallResults = @(
-        Install-WindowsUpdate `
-            -AcceptAll `
-            -IgnoreReboot `
-            -Confirm:$false `
-            -Verbose `
-            -ErrorAction Stop
-    )
+    $InstallResultCount = 0
+    $FailedResultCount = 0
 
-    if ($InstallResults.Count -gt 0) {
-        $InstallResults | Out-Host
-    }
-
-    $FailedResults = @(
-        $InstallResults |
-            Where-Object {
-                $Status = [string]$_.Status
-                if (-not $Status) {
-                    $Status = [string]$_.Result
-                }
-
-                $Status -match '\b(Fail(?:ed|ure)?|Errors?|Abort(?:ed)?|Cancel(?:led|ed)?)\b'
+    Install-WindowsUpdate `
+        -AcceptAll `
+        -IgnoreReboot `
+        -Confirm:$false `
+        -Verbose `
+        -ErrorAction Stop |
+        ForEach-Object {
+            $InstallResultCount++
+            $Status = [string]$_.Status
+            if (-not $Status) {
+                $Status = [string]$_.Result
             }
-    )
 
-    if ($FailedResults.Count -gt 0) {
-        $FailedResults | Out-Host
-        throw "$($FailedResults.Count) update(s) failed to install."
+            if ($Status -match '\b(Fail(?:ed|ure)?|Errors?|Abort(?:ed)?|Cancel(?:led|ed)?)\b') {
+                $FailedResultCount++
+            }
+
+            $_ | Out-Host
+        }
+
+    if ($FailedResultCount -gt 0) {
+        throw "$FailedResultCount update(s) failed to install."
     }
 
-    if ($InstallResults.Count -eq 0) {
+    if ($InstallResultCount -eq 0) {
         throw "Install-WindowsUpdate returned no installation results."
     }
 }
