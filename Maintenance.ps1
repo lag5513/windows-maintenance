@@ -157,7 +157,7 @@ function Invoke-WindowsUpdateInstallation {
                     $Status = [string]$_.Result
                 }
 
-                $Status -match '^(Failed|Failure|Error|Aborted|Cancelled|Canceled)(\b|$)'
+                $Status -match '\b(Fail(?:ed|ure)?|Errors?|Abort(?:ed)?|Cancel(?:led|ed)?)\b'
             }
     )
 
