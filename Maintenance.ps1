@@ -821,21 +821,21 @@ do {
 
     Write-Host " 1. Repair Windows"                   -ForegroundColor Yellow
     Write-Host " 2. Update Windows"                   -ForegroundColor Yellow
-    Write-Host "10. Reset Windows Update Components"  -ForegroundColor Yellow
-    Write-Host " 3. Repair + Update Windows"          -ForegroundColor Yellow
-    Write-Host " 4. Update Applications"              -ForegroundColor Yellow
-    Write-Host " 5. Reset Print Spooler"               -ForegroundColor Yellow
-    Write-Host " 6. Repair System Clock"               -ForegroundColor Yellow
-    Write-Host " 7. Check Disk Health"                 -ForegroundColor Yellow
-    Write-Host " 8. Check Page File"                   -ForegroundColor Yellow
-    Write-Host " 9. Restart Computer"                 -ForegroundColor Yellow
+    Write-Host " 3. Reset Windows Update Components"  -ForegroundColor Yellow
+    Write-Host " 4. Repair + Update Windows"          -ForegroundColor Yellow
+    Write-Host " 5. Update Applications"              -ForegroundColor Yellow
+    Write-Host " 6. Reset Print Spooler"              -ForegroundColor Yellow
+    Write-Host " 7. Repair System Clock"              -ForegroundColor Yellow
+    Write-Host " 8. Check Disk Health"                -ForegroundColor Yellow
+    Write-Host " 9. Check Page File"                  -ForegroundColor Yellow
+    Write-Host "10. Restart Computer"                 -ForegroundColor Yellow
     Write-Host " 0. Exit"                             -ForegroundColor Yellow
     Write-Host ""
 
     $ValidOptions = @("0","1","2","3","4","5","6","7","8","9","10")
 
     $Selections = (
-        (Read-Host "Select option(s) (example: 1,2,5,7,8,10)") -split ','
+        (Read-Host "Select option(s) (example: 1,2,3,7,9)") -split ','
     ).Trim() | Select-Object -Unique
     
     $InvalidOptions = $Selections | Where-Object { $_ -notin $ValidOptions }
@@ -849,7 +849,7 @@ do {
         return
     }
 
-    if ($Selections -contains "9" -and $Selections.Count -gt 1) {
+    if ($Selections -contains "10" -and $Selections.Count -gt 1) {
         Write-Host ""
         Write-Host "Restart Computer must be selected by itself." -ForegroundColor Red
         Read-Host "Press Enter to continue"
@@ -879,36 +879,36 @@ do {
         }
 
         "3" {
+            $WindowsUpdateResetStatus = if (Invoke-WindowsUpdateComponentReset) { "Completed" } else { "Failed" }
+        }
+
+        "4" {
             $RepairStatus = Invoke-SystemRepair
             $UpdateCount = Invoke-WindowsUpdates | Select-Object -Last 1
         }
 
-        "4" {
+        "5" {
             Invoke-ApplicationUpdates
             $AppsStatus = "Completed"
         }
 
-        "5" {
+        "6" {
             $SpoolerStatus = if (Reset-PrintSpooler) { "Completed" } else { "Failed" }
         }
 
-        "6" {
+        "7" {
             $ClockStatus = if (Repair-SystemClock) { "Completed" } else { "Failed" }
         }
 
-        "7" {
+        "8" {
             $DiskStatus = Test-DiskHealth
         }
 
-        "8" {
+        "9" {
             $PageFileStatus = Invoke-PageFileManagement
         }
 
         "10" {
-            $WindowsUpdateResetStatus = if (Invoke-WindowsUpdateComponentReset) { "Completed" } else { "Failed" }
-        }
-
-        "9" {
             $RestartConfirmation = Read-Host "Are you sure you want to restart this computer? (Y/N)"
             if ($RestartConfirmation -match '^(Y|YES)$') {
                 try {
@@ -978,7 +978,7 @@ do {
             Write-Host "Applications: $AppsStatus"
         }
 
-        if ($Selections -contains "2" -or $Selections -contains "3") {
+        if ($Selections -contains "2" -or $Selections -contains "4") {
             Write-Host "Updates     : $UpdateCount"
         }
 
