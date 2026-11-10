@@ -206,35 +206,94 @@ function Remove-WindowsUpdateBackupFolders {
     }
 }
 
-function Invoke-WindowsUpdateInstallationWithReset {
+function Import-PSWindowsUpdateModule {
+
+    Set-PSRepository `
+        -Name PSGallery `
+        -InstallationPolicy Trusted `
+        -ErrorAction SilentlyContinue
+
+    $MinimumNuGetVersion = [version]"2.8.5.201"
+    $NuGetProvider = Get-PackageProvider `
+        -Name NuGet `
+        -ListAvailable `
+        -ErrorAction SilentlyContinue |
+        Where-Object { $_.Version -ge $MinimumNuGetVersion } |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+
+    if (-not $NuGetProvider) {
+        Write-Host "Installing NuGet provider..." -ForegroundColor Yellow
+
+        Install-PackageProvider `
+            -Name NuGet `
+            -MinimumVersion $MinimumNuGetVersion `
+            -Force `
+            -ForceBootstrap `
+            -Scope CurrentUser `
+            -Confirm:$false `
+            -ErrorAction Stop
+    }
+
+    Import-PackageProvider `
+        -Name NuGet `
+        -MinimumVersion $MinimumNuGetVersion `
+        -Force `
+        -ErrorAction Stop |
+        Out-Null
+
+    Write-Host "NuGet provider ready." -ForegroundColor Green
+
+    if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+        Install-Module `
+            -Name PSWindowsUpdate `
+            -Force `
+            -AllowClobber `
+            -Confirm:$false `
+            -ErrorAction Stop
+    }
+
+    $ModulePath = Get-Module `
+        -ListAvailable `
+        -Name PSWindowsUpdate |
+        Sort-Object Version -Descending |
+        Select-Object -First 1
+
+    if (-not $ModulePath) {
+        throw "PSWindowsUpdate module not found."
+    }
+
+    Unblock-File `
+        -Path $ModulePath.Path `
+        -ErrorAction SilentlyContinue
+
+    Import-Module `
+        $ModulePath.Path `
+        -Force `
+        -DisableNameChecking `
+        -ErrorAction Stop
+}
+
+function Invoke-WindowsUpdateComponentReset {
+
+    Write-Host ""
+    Write-Host "===== RESET WINDOWS UPDATE COMPONENTS =====" -ForegroundColor Cyan
 
     try {
-        Invoke-WindowsUpdateInstallation
-        return $true
-    }
-    catch {
-        Write-Host "Update installation failed: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "Resetting Windows Update components before one retry..." -ForegroundColor Yellow
-    }
+        Import-PSWindowsUpdateModule
 
-    $RetrySucceeded = $false
-
-    try {
         if (-not (Get-Command Reset-WUComponents -ErrorAction SilentlyContinue)) {
             throw "Reset-WUComponents is not available in the installed PSWindowsUpdate module."
         }
 
         Reset-WUComponents -Verbose -ErrorAction Stop | Out-Host
-
-        Write-Host "Retrying Windows update installation once..." -ForegroundColor Yellow
-        Invoke-WindowsUpdateInstallation
-        $RetrySucceeded = $true
+        Write-Host "Windows Update components reset successfully." -ForegroundColor Green
+        return $true
     }
     catch {
-        Write-Host "Windows update installation failed after resetting components and one retry: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Unable to reset Windows Update components: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
     }
-
-    return $RetrySucceeded
 }
 
 function Invoke-WindowsUpdates {
@@ -244,74 +303,7 @@ function Invoke-WindowsUpdates {
 
     try {
 
-        Set-PSRepository `
-            -Name PSGallery `
-            -InstallationPolicy Trusted `
-            -ErrorAction SilentlyContinue
-
-        $MinimumNuGetVersion = [version]"2.8.5.201"
-        $NuGetProvider = Get-PackageProvider `
-            -Name NuGet `
-            -ListAvailable `
-            -ErrorAction SilentlyContinue |
-            Where-Object { $_.Version -ge $MinimumNuGetVersion } |
-            Sort-Object Version -Descending |
-            Select-Object -First 1
-
-        if (-not $NuGetProvider) {
-        
-            Write-Host "Installing NuGet provider..." -ForegroundColor Yellow
-        
-            Install-PackageProvider `
-                -Name NuGet `
-                -MinimumVersion $MinimumNuGetVersion `
-                -Force `
-                -ForceBootstrap `
-                -Scope CurrentUser `
-                -Confirm:$false `
-                -ErrorAction Stop
-        }
-
-        Import-PackageProvider `
-            -Name NuGet `
-            -MinimumVersion $MinimumNuGetVersion `
-            -Force `
-            -ErrorAction Stop |
-            Out-Null
-        
-        Write-Host "NuGet provider ready." -ForegroundColor Green
-
-        if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
-
-            Install-Module `
-                -Name PSWindowsUpdate `
-                -Force `
-                -AllowClobber `
-                -Confirm:$false
-        }
-
-        $ModulePath = Get-Module `
-                    -ListAvailable `
-                    -Name PSWindowsUpdate |
-                    Sort-Object Version -Descending |
-                    Select-Object -First 1
-
-        if ($ModulePath) {
-        
-            Unblock-File `
-                -Path $ModulePath.Path `
-                -ErrorAction SilentlyContinue
-        
-            Import-Module `
-                $ModulePath.Path `
-                -Force `
-                -DisableNameChecking `
-                -ErrorAction Stop
-        }
-        else {
-        
-            throw "PSWindowsUpdate module not found."
-        }
+        Import-PSWindowsUpdateModule
 
         Write-Host "Scanning Windows Update for Updates..." -ForegroundColor Yellow
 
@@ -350,11 +342,7 @@ function Invoke-WindowsUpdates {
             Read-Host "Press Enter to install these updates"
             Write-Host "Installing updates..." -ForegroundColor Yellow
 
-            $InstallationSucceeded = Invoke-WindowsUpdateInstallationWithReset
-
-            if (-not $InstallationSucceeded) {
-                return 0
-            }
+            Invoke-WindowsUpdateInstallation
 
             return $Count
         }
@@ -831,22 +819,23 @@ do {
     Write-Host "======================================" -ForegroundColor Cyan
     Write-Host ""
 
-    Write-Host " 1. Repair Windows"         -ForegroundColor Yellow
-    Write-Host " 2. Update Windows"         -ForegroundColor Yellow
-    Write-Host " 3. Repair + Update Windows"-ForegroundColor Yellow
-    Write-Host " 4. Update Applications"    -ForegroundColor Yellow
-    Write-Host " 5. Reset Print Spooler"    -ForegroundColor Yellow
-    Write-Host " 6. Repair System Clock"    -ForegroundColor Yellow
-    Write-Host " 7. Check Disk Health"      -ForegroundColor Yellow
-    Write-Host " 8. Check Page File"        -ForegroundColor Yellow
-    Write-Host " 9. Restart Computer"       -ForegroundColor Yellow
-    Write-Host " 0. Exit"                   -ForegroundColor Yellow
+    Write-Host " 1. Repair Windows"                   -ForegroundColor Yellow
+    Write-Host " 2. Update Windows"                   -ForegroundColor Yellow
+    Write-Host "10. Reset Windows Update Components"  -ForegroundColor Yellow
+    Write-Host " 3. Repair + Update Windows"          -ForegroundColor Yellow
+    Write-Host " 4. Update Applications"              -ForegroundColor Yellow
+    Write-Host " 5. Reset Print Spooler"               -ForegroundColor Yellow
+    Write-Host " 6. Repair System Clock"               -ForegroundColor Yellow
+    Write-Host " 7. Check Disk Health"                 -ForegroundColor Yellow
+    Write-Host " 8. Check Page File"                   -ForegroundColor Yellow
+    Write-Host " 9. Restart Computer"                 -ForegroundColor Yellow
+    Write-Host " 0. Exit"                             -ForegroundColor Yellow
     Write-Host ""
 
-    $ValidOptions = @("0","1","2","3","4","5","6","7","8","9")
+    $ValidOptions = @("0","1","2","3","4","5","6","7","8","9","10")
 
     $Selections = (
-        (Read-Host "Select option(s) (example: 1,2,5,7,8)") -split ','
+        (Read-Host "Select option(s) (example: 1,2,5,7,8,10)") -split ','
     ).Trim() | Select-Object -Unique
     
     $InvalidOptions = $Selections | Where-Object { $_ -notin $ValidOptions }
@@ -875,6 +864,7 @@ do {
     $ClockStatus = ""
     $DiskStatus = ""
     $PageFileStatus = ""
+    $WindowsUpdateResetStatus = ""
 
     foreach ($Selection in $Selections) {
 
@@ -912,6 +902,10 @@ do {
 
         "8" {
             $PageFileStatus = Invoke-PageFileManagement
+        }
+
+        "10" {
+            $WindowsUpdateResetStatus = if (Invoke-WindowsUpdateComponentReset) { "Completed" } else { "Failed" }
         }
 
         "9" {
@@ -974,6 +968,10 @@ do {
 
         if ($PageFileStatus) {
             Write-Host "Page File   : $PageFileStatus"
+        }
+
+        if ($WindowsUpdateResetStatus) {
+            Write-Host "Update Reset: $WindowsUpdateResetStatus"
         }
 
         if ($AppsStatus) {
