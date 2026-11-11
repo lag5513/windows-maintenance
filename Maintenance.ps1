@@ -134,40 +134,6 @@ function Reset-PrintSpooler {
     }
 }
 
-function Invoke-WindowsUpdateInstallation {
-
-    $InstallResultCount = 0
-    $FailedResultCount = 0
-
-    Install-WindowsUpdate `
-        -AcceptAll `
-        -IgnoreReboot `
-        -Confirm:$false `
-        -Verbose `
-        -ErrorAction Stop |
-        ForEach-Object {
-            $InstallResultCount++
-            $Status = [string]$_.Status
-            if (-not $Status) {
-                $Status = [string]$_.Result
-            }
-
-            if ($Status -match '\b(Fail(?:ed|ure)?|Errors?|Abort(?:ed)?|Cancel(?:led|ed)?)\b') {
-                $FailedResultCount++
-            }
-
-            $_ | Out-Host
-        }
-
-    if ($FailedResultCount -gt 0) {
-        throw "$FailedResultCount update(s) failed to install."
-    }
-
-    if ($InstallResultCount -eq 0) {
-        throw "Install-WindowsUpdate returned no installation results."
-    }
-}
-
 function Remove-WindowsUpdateBackupFolders {
 
     $BackupLocations = @(
@@ -302,55 +268,18 @@ function Invoke-WindowsUpdates {
 
         Import-PSWindowsUpdateModule
 
-        Write-Host "Scanning Windows Update for Updates..." -ForegroundColor Yellow
-
-        $Updates = @(Get-WindowsUpdate -ErrorAction Stop)
-
-        if ($Updates.Count -gt 0) {
-            $AvailableUpdates = @(
-                foreach ($Update in $Updates) {
-                    $KbValues = @($Update.KB)
-                    $SizeValues = @($Update.Size)
-                    $TitleValues = @($Update.Title)
-                    $RowCount = [Math]::Max(
-                        $KbValues.Count,
-                        [Math]::Max($SizeValues.Count, $TitleValues.Count)
-                    )
-
-                    for ($Index = 0; $Index -lt $RowCount; $Index++) {
-                        [pscustomobject]@{
-                            KB = if ($Index -lt $KbValues.Count) { $KbValues[$Index] } else { "" }
-                            Size = if ($Index -lt $SizeValues.Count) { $SizeValues[$Index] } else { "" }
-                            Title = if ($Index -lt $TitleValues.Count) { $TitleValues[$Index] } else { "" }
-                        }
-                    }
-                }
-            )
-            $Count = $AvailableUpdates.Count
-
-            Write-Host ""
-            Write-Host "Available updates:" -ForegroundColor Cyan
-
-            foreach ($Update in $AvailableUpdates) {
-                Write-Host ("  {0}  {1}  {2}" -f $Update.KB, $Update.Size, $Update.Title)
-            }
-
-            Write-Host "$($Count) Update(s) Found" -ForegroundColor Green
-            Read-Host "Press Enter to install these updates"
-            Write-Host "Installing updates..." -ForegroundColor Yellow
-
-            Invoke-WindowsUpdateInstallation
-
-            return $Count
-        }
-
-        Write-Host "No Updates Available" -ForegroundColor Green
-        return 0
+        Write-Host "Installing Windows updates..." -ForegroundColor Yellow
+        Install-WindowsUpdate `
+            -AcceptAll `
+            -IgnoreReboot `
+            -Confirm:$false `
+            -Verbose `
+            -ErrorAction Stop
     }
     catch {
 
         Write-Host $_.Exception.Message -ForegroundColor Red
-        return 0
+        return
     }
     finally {
         Remove-WindowsUpdateBackupFolders
@@ -855,7 +784,6 @@ do {
 
     $StartTime = Get-Date
     $RepairStatus = ""
-    [int]$UpdateCount = 0
     $SpoolerStatus = ""
     $AppsStatus = ""
     $ClockStatus = ""
@@ -871,17 +799,12 @@ do {
             $RepairStatus = Invoke-SystemRepair
         }
 
-        "2" {
-            $UpdateCount = Invoke-WindowsUpdates | Select-Object -Last 1
-        }
-
         "3" {
             $WindowsUpdateResetStatus = if (Invoke-WindowsUpdateComponentReset) { "Completed" } else { "Failed" }
         }
 
         "4" {
             $RepairStatus = Invoke-SystemRepair
-            $UpdateCount = Invoke-WindowsUpdates | Select-Object -Last 1
         }
 
         "5" {
@@ -926,6 +849,10 @@ do {
         }
     }
 }
+
+    if ($Selections -contains "2" -or $Selections -contains "4") {
+        Invoke-WindowsUpdates
+    }
 
     if ($Selection -ne "0") {
 
@@ -973,10 +900,6 @@ do {
 
         if ($AppsStatus) {
             Write-Host "Applications: $AppsStatus"
-        }
-
-        if ($Selections -contains "2" -or $Selections -contains "4") {
-            Write-Host "Updates     : $UpdateCount"
         }
 
         Write-Host ""
